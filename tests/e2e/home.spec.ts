@@ -1,178 +1,137 @@
 import { expect, test } from '@playwright/test';
+import { startTestServer } from '../../scripts/local-test-server.mjs';
 
-test.describe('simple landing page', () => {
-  test('renders English and localized SEO', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-    await expect(page.locator('header nav')).toBeVisible();
-    await expect(page.locator('main h1')).toBeVisible();
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
-      'href',
-      new URL('/', page.url()).toString()
+let fixture: Awaited<ReturnType<typeof startTestServer>>;
+test.beforeAll(async () => {
+  fixture = await startTestServer();
+});
+test.afterAll(async () => {
+  await fixture?.close();
+});
+
+test('owner initializes an empty private ledger and keeps language, navigation and theme', async ({
+  page,
+  isMobile,
+}) => {
+  const browserErrors: string[] = [];
+  page.on('pageerror', (error) => browserErrors.push(error.message));
+  page.on('console', (event) => {
+    if (event.type() === 'error') browserErrors.push(event.text());
+  });
+  await page.goto(fixture.url);
+  await expect(
+    page.getByRole('heading', { name: 'Create your private ledger' })
+  ).toBeVisible();
+  await expect(page.getByLabel('Primary currency')).toHaveValue('CNY');
+  await expect(page.getByLabel('Time zone')).toHaveValue('Asia/Shanghai');
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await page.getByLabel('Language', { exact: true }).selectOption('zh');
+  await expect(
+    page.getByRole('heading', { name: '建立你的私人账本' })
+  ).toBeVisible();
+  await page.getByLabel('主币种', { exact: true }).selectOption('USD');
+  await page.getByLabel('时区', { exact: true }).selectOption('UTC');
+  await page.getByRole('button', { name: '创建账本' }).click();
+  await expect(
+    page.getByRole('heading', { name: '今天想记点什么？' })
+  ).toBeVisible();
+  if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole('button', { name: '午饭35，网站推广20美元', exact: true })
+  ).toBeInViewport({ ratio: 1 });
+  await expect(
+    page.getByRole('button', { name: '最近3个月外卖花了多少钱', exact: true })
+  ).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    'content',
+    'noindex, nofollow'
+  );
+  await page.getByRole('link', { name: '设置', exact: true }).click();
+  await expect(page.getByLabel('主币种', { exact: true })).toHaveValue('USD');
+  await expect(page.getByLabel('时区', { exact: true })).toHaveValue('UTC');
+  await page.getByLabel('时区', { exact: true }).selectOption('Asia/Tokyo');
+  await page.getByRole('button', { name: '保存设置' }).click();
+  await expect(page.getByText('设置已保存。')).toBeVisible();
+  const theme = page.locator('[data-slot="theme-switcher-trigger"]');
+  await theme.click();
+  await page.locator('[data-theme-option="dark"]').click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await page.getByLabel('语言', { exact: true }).selectOption('en');
+  await expect(
+    page.getByRole('heading', { name: 'Settings', exact: true })
+  ).toBeVisible();
+  await expect(page).toHaveURL(/view=settings/);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.getByLabel('Time zone')).toHaveValue('Asia/Tokyo');
+  await expect(page.getByText('Configured', { exact: true })).toBeVisible();
+  await expect(page.locator('input[type="password"]')).toHaveCount(0);
+  await page.getByLabel('Language', { exact: true }).selectOption('browser');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await theme.click();
+  await page.locator('[data-theme-option="system"]').click();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).not.toHaveClass(/dark/);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await page.getByRole('link', { name: 'Entries', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Your ledger is empty' })
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Reports', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Reports', exact: true })
+  ).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(
+    page.getByRole('link', { name: 'Settings', exact: true })
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth
+    )
+  ).toBe(true);
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe(
+    'BODY'
+  );
+
+  for (const path of [
+    '/',
+    '/verify',
+    '/_serverFn/synthetic',
+    '/api/initialize',
+    '/api/probe',
+    '/api/settings',
+    '/api/export',
+    '/assets/%2F..%2F_serverFn/synthetic',
+  ]) {
+    const response = await fixture.runtime.dispatchFetch(
+      `https://moni.test${path}`,
+      { headers: { 'Accept-Language': 'zh-CN' } }
     );
-    await expect(page.locator('link[hreflang="zh-CN"]')).toHaveAttribute(
-      'href',
-      new URL('/zh', page.url()).toString()
-    );
-    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
-      'content',
-      new URL('/', page.url()).toString()
-    );
-    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
-      'content',
-      new URL('/og.png', page.url()).toString()
-    );
-    await expect(page.locator('#foundation')).toHaveCount(0);
-    await expect(page.locator('#stack')).toBeVisible();
-    await expect(page.locator('#structure')).toBeVisible();
-    await expect(page.locator('#structure article')).toHaveCount(4);
-    await expect(page.locator('#template')).toBeVisible();
-    await expect(page.locator('#faq')).toBeVisible();
-    await expect(page.locator('footer')).toBeVisible();
-  });
-
-  test('renders Simplified Chinese at /zh', async ({ page }) => {
-    await page.goto('/zh');
-    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
-    await expect(page.locator('header nav')).toBeVisible();
-    await expect(page.locator('main h1')).toBeVisible();
-    await expect(page.locator('#stack')).toBeVisible();
-    await expect(page.locator('#structure')).toBeVisible();
-    await expect(page.locator('#template')).toBeVisible();
-    await expect(page.locator('#faq')).toBeVisible();
-  });
-
-  test('switches and persists theme', async ({ page }) => {
-    await page.goto('/');
-    const theme = page.locator('[data-slot="theme-switcher-trigger"]');
-    await theme.click();
-    await page.locator('[data-theme-option="light"]').click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await theme.click();
-    await page.locator('[data-theme-option="dark"]').click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await page.reload();
-    await expect(page.locator('html')).toHaveClass(/dark/);
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  });
-
-  test('switches language from a menu and preserves the anchor', async ({
-    page,
-  }) => {
-    await page.goto('/#faq');
-    await page.locator('[data-slot="language-switcher-trigger"]').click();
-    const chineseLanguage = page.locator('[data-locale="zh"]');
-    await expect(chineseLanguage).toBeVisible();
-    await chineseLanguage.click();
-
-    await expect(page).toHaveURL(/\/zh#faq$/);
-    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
-  });
-
-  test('opens one FAQ answer at a time', async ({ page }) => {
-    await page.goto('/');
-    const questions = page.locator('#faq button');
-    const firstQuestion = questions.nth(0);
-    const secondQuestion = questions.nth(1);
-
-    await expect(questions).toHaveCount(4);
-    await expect(firstQuestion).toHaveAttribute('aria-expanded', 'true');
-    await expect(secondQuestion).toBeEnabled();
-    await secondQuestion.click();
-    await expect(secondQuestion).toHaveAttribute('aria-expanded', 'true');
-    await expect(firstQuestion).toHaveAttribute('aria-expanded', 'false');
-  });
-
-  test('opens mobile navigation and reaches an anchor', async ({ page }) => {
-    test.skip(test.info().project.name !== 'mobile', 'mobile project only');
-    await page.goto('/');
-    await page.locator('button[aria-controls="mobile-navigation"]').click();
-    const menu = page.locator('#mobile-navigation');
-    await expect(menu).toBeVisible();
-    await menu.locator('a[href="/#stack"]').click();
-    await expect(page.locator('#stack')).toBeInViewport();
-  });
-
-  test('keeps mobile navigation available at 320px', async ({ page }) => {
-    test.skip(test.info().project.name !== 'mobile', 'mobile project only');
-    await page.setViewportSize({ width: 320, height: 700 });
-    await page.goto('/');
-
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth
-        )
-      )
-      .toBe(true);
-    const menuButton = page.locator(
-      'button[aria-controls="mobile-navigation"]'
-    );
-    await expect(menuButton).toBeVisible();
-    await menuButton.click();
-    await expect(page.locator('#mobile-navigation')).toBeVisible();
-  });
-
-  test('keeps intentionally absent application routes at 404', async ({
-    page,
-  }) => {
-    for (const path of [
-      '/login',
-      '/register',
-      '/pricing',
-      '/dashboard',
-      '/admin',
-      '/blog',
-      '/contact',
-      '/api/auth',
-      '/zh/login',
-    ]) {
-      const response = await page.goto(path);
-      expect(response?.status(), path).toBe(404);
-      await expect(page.locator('main h1')).toBeVisible();
-      await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-        'content',
-        'noindex, nofollow'
-      );
+    expect(response.status, path).toBe(401);
+    expect(response.headers.get('Cache-Control')).toContain('no-store');
+    expect(response.headers.get('X-Robots-Tag')).toContain('noindex');
+    const body = await response.text();
+    if (!path.startsWith('/api/')) {
+      expect(body).toContain('访问受限');
+      expect(body).not.toContain('<nav');
+      expect(body).not.toContain('创建账本');
     }
-  });
-
-  test('serves machine-readable endpoints', async ({ request }) => {
-    const robots = await request.get('/robots.txt');
-    expect(robots.ok()).toBe(true);
-    expect(await robots.text()).toContain('Sitemap:');
-    expect(await robots.text()).toContain('/sitemap.xml');
-
-    const sitemap = await request.get('/sitemap.xml');
-    expect(sitemap.ok()).toBe(true);
-    const sitemapXml = await sitemap.text();
-    expect(sitemapXml).toContain('<urlset');
-    const paths = [...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
-      ([, url]) => new URL(url).pathname
-    );
-    expect(paths).toEqual(['/', '/zh']);
-
-    const manifest = await request.get('/manifest.webmanifest');
-    expect(manifest.ok()).toBe(true);
-    expect(manifest.headers()['content-type']).toContain(
-      'application/manifest+json'
-    );
-    const manifestJson = await manifest.json();
-    expect(manifestJson.name).toBeTruthy();
-    expect(manifestJson.start_url).toBe('/');
-    expect(manifestJson.scope).toBe('/');
-    expect(manifestJson.icons).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ sizes: '192x192', type: 'image/png' }),
-        expect.objectContaining({ sizes: '512x512', type: 'image/png' }),
-        expect.objectContaining({ purpose: 'maskable' }),
-      ])
-    );
-
-    for (const icon of manifestJson.icons) {
-      const response = await request.get(icon.src);
-      expect(response.ok(), icon.src).toBe(true);
-      expect(response.headers()['content-type']).toContain('image/png');
-    }
-  });
+  }
+  const robots = await fixture.runtime.dispatchFetch(
+    'https://moni.test/robots.txt'
+  );
+  expect(await robots.text()).toBe('User-agent: *\nDisallow: /\n');
+  const sitemap = await fixture.runtime.dispatchFetch(
+    'https://moni.test/sitemap.xml'
+  );
+  expect(await sitemap.text()).not.toContain('<loc>');
+  await page.goto(`${fixture.url}/zh`);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+  await expect(
+    page.getByRole('heading', { name: '今天想记点什么？' })
+  ).toBeVisible();
+  expect(browserErrors).toEqual([]);
 });

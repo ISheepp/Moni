@@ -18,5 +18,13 @@ export default defineConfig({
     tanstackStart(),
     viteReact(),
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    {
+      name: 'moni-private-build',
+      enforce: 'post',
+      generateBundle(_options, bundle) {
+        // Cloudflare emits local preview secrets by default; exclude them from releases.
+        delete bundle['.dev.vars'];
+      },
+    },
   ],
 });

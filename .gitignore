@@ -12,3 +12,4 @@ project.inlang/README.md
 *.local
 .env*
 !.env.example
+.dev.vars*

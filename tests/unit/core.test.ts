@@ -5,7 +5,7 @@ import { localeMeta, localizedPath } from '@/lib/locale';
 import { absoluteSiteUrl, homeHead, siteOrigin } from '@/lib/seo';
 import { cn } from '@/lib/utils';
 
-describe('TanStarter Lite core contracts', () => {
+describe('Moni core contracts', () => {
   it('uses localized simple home paths', () => {
     expect(localizedPath('en')).toBe('/');
     expect(localizedPath('zh')).toBe('/zh');
@@ -15,10 +15,8 @@ describe('TanStarter Lite core contracts', () => {
   });
 
   it('keeps the repository as the only external destination', () => {
-    expect(websiteConfig.name).toBe('TanStarter Lite');
-    expect(websiteConfig.repository).toBe(
-      'https://github.com/MkFastHQ/mkfast-lite'
-    );
+    expect(websiteConfig.name).toBe('Moni');
+    expect(websiteConfig.repository).toBe('https://github.com/ISheepp/Moni');
     expect(websiteConfig.themeStorageKey).toBeTruthy();
     expect(websiteConfig.manifest.startUrl).toBe('/');
   });

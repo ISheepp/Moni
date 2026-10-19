@@ -1,4 +1,4 @@
-import * as m from '@/locale/paraglide/messages';
+import * as m from '../locale/paraglide/messages';
 
 export type AppLocale = 'en' | 'zh';
 

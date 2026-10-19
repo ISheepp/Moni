@@ -118,6 +118,59 @@
   }
 }
 
+.moni-field {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--muted-foreground);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.moni-field:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.moni-nav {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 700;
+}
+
+.moni-nav-active {
+  background: color-mix(in srgb, var(--orange) 13%, transparent);
+  color: var(--foreground);
+}
+
+.moni-nav:focus-visible,
+.moni-skip:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.moni-skip {
+  position: fixed;
+  z-index: 100;
+  inset: 12px auto auto 12px;
+  transform: translateY(-200%);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.moni-skip:focus-visible {
+  transform: translateY(0);
+}
+
 @keyframes board-arrive {
   from {
     opacity: 0.65;

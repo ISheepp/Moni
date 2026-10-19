@@ -5,10 +5,10 @@ import {
   Scripts,
   useLocation,
 } from '@tanstack/react-router';
-import { Footer } from '@/components/layout/footer';
-import { Header } from '@/components/layout/header';
+import { useEffect } from 'react';
 import { websiteConfig } from '@/config/website';
 import { type AppLocale, localeMeta, message } from '@/lib/locale';
+import { applyTheme } from '@/lib/theme';
 import appCss from '@/styles.css?url';
 
 export const Route = createRootRoute({
@@ -38,21 +38,17 @@ function currentLocale(pathname: string): AppLocale {
 }
 
 function RootLayout() {
-  const pathname = useLocation({ select: (location) => location.pathname });
-  const locale = currentLocale(pathname);
-  return (
-    <div className="isolate min-h-screen">
-      <a
-        href="#main-content"
-        className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-lg border-2 border-ink bg-yellow px-4 py-2 font-black text-ink shadow-brutal focus:translate-y-0"
-      >
-        {message('skip_to_content', locale)}
-      </a>
-      <Header locale={locale} />
-      <Outlet />
-      <Footer locale={locale} />
-    </div>
-  );
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const sync = () => {
+      if (document.documentElement.dataset.theme === 'system')
+        applyTheme('system');
+    };
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+  return <Outlet />;
 }
 
 function NotFound() {
@@ -101,14 +97,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {/*
-        THESIS: A complete simple-site foundation with every SaaS subsystem visibly absent.
-        OWN-WORLD: Warm workshop paper, ink construction lines, offset color plates, rounded heavy type.
-        STORY: Understand the smaller starter, inspect its honest scope, create it, and deploy.
-        FIRST VIEWPORT: Asymmetric headline and CTA beside a layered build board that ends at Workers.
-        FORM: Rebuilt from the approved Raft landing topology; seed key raft-topology-clean-room.
-        FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
-        */}
         {children}
         <Scripts />
       </body>

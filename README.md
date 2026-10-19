@@ -1,189 +1,75 @@
-<h1 align="center">TanStarter Lite</h1>
+# Moni
 
-<p align="center">
-  A multilingual starter for a simple, fast public website.
-</p>
+开源、自己部署的私人账本。支持中英文、手机和 PC、深浅及系统主题；Cloudflare Access 只放行本人，D1 保存账目，每会话 Durable Object 协调 AI 回复。
 
-<p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
-  <a href="https://react.dev"><img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&amp;logoColor=000" alt="React 19" /></a>
-  <a href="https://workers.cloudflare.com"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&amp;logoColor=white" alt="Cloudflare Workers" /></a>
-</p>
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni)
 
-<p align="center">
-  <a href="#getting-started">Quick Start</a> ·
-  <a href="#customize-the-template">Customize</a> ·
-  <a href="#deploy-to-cloudflare-workers">Deploy</a>
-</p>
+**当前为 v0.1 部署候选版。** 按钮使用此仓库默认分支的已发布代码；真实部署与 Access 保护仍在验收，进展见[部署验证记录](docs/verification/deployment-readiness.md)与[验收总表](docs/verification/v0.1-acceptance.md)。
 
-[![TanStarter Lite preview](./public/og.png)](https://github.com/MkFastHQ/mkfast-lite)
+## 功能
 
-TanStarter Lite is the lightweight, open-source edition of
-[TanStarter](https://tanstarter.dev): a deliberately small starter for a
-multilingual public website. It includes a complete localized landing page,
-light/dark/system themes, SEO endpoints, tests, and Cloudflare Workers
-deployment—without the operational surface of a SaaS starter.
+- 自然语言整理多笔可编辑草稿，建议类目和标签，保留逐笔备注；默认由本人确认入账，也可在设置中明确开启“直接入账”。
+- 多币种与固定主币折算：ECB 参考报价、手填汇率或实际扣款，保留原币与折算依据。
+- 手动收支、关联退款、回收站、类目维护和标签合并。
+- 组合筛选、备注关键词、基础统计、同条件明细、会话内自然语言查账与连续追问。
+- 筛选记录 CSV、完整 JSON 备份；校验预览、保存现账、明确确认后原子恢复。
 
-It intentionally does not include authentication, payments, persistence,
-storage, cache, transactional email, newsletters, or an admin surface. Add
-those only when they match the product you are building.
+AI 未配置时，手动记账、筛选、统计、手填折算和备份恢复均可使用。另提供可选的微信 ClawBot 入口：同一本账本、独立微信会话、文字记账与连续查账，默认可在微信自然回复确认意图后入账，也可在网页核对确认；支持本人设置的两档记账权限。接入配置和真实验收边界见[微信接入说明](docs/wechat-integration.md)；原 v0.1 验收基线保持不变。
 
-## Features
+## 部署
 
-- **Multilingual by default** — English at `/` and Simplified Chinese at `/zh`,
-  with typed Paraglide messages and a language menu that keeps the current
-  section anchor.
-- **A focused landing page** — responsive navigation, hero, stack,
-  architecture, template, FAQ, and closing sections.
-- **Theme choices** — light, dark, and system themes; the selection persists
-  in local storage.
-- **Search-ready public surface** — localized canonical and alternate links,
-  Open Graph and Twitter metadata, JSON-LD, `robots.txt`, `sitemap.xml`, and
-  `manifest.webmanifest`.
-- **No required services** — the default Worker has no D1, R2, KV, or secret
-  bindings and deploys to `workers.dev`.
+1. 点击上方 **Deploy to Cloudflare**，登录 Cloudflare 并授权 GitHub，确认仓库和应用名称。**无需填写 AI Key 或微信配置。**
+2. 接受自动识别的构建命令 `pnpm run build`、部署命令 `pnpm run deploy`，等待 Worker、D1、会话 DO 和数据库迁移完成。
+3. 打开 Cloudflare 给出的地址，即可看到首次使用引导与存储准备状态。
+4. 按引导配置只允许本人的 Cloudflare Access，验证身份后选择主币种与时区，开始手动记账。AI 与微信可稍后配置。
 
-## Tech stack
+详细步骤见[部署指南](docs/deployment.md)。Access 本人策略及身份绑定须由部署者完成；完成前只能读取通用引导，业务接口继续拒绝访问，不存在首位访问者认领账本。
 
-- [React 19](https://react.dev/) and [TypeScript](https://www.typescriptlang.org/)
-- [TanStack Start](https://tanstack.com/start) and TanStack Router
-- [Tailwind CSS](https://tailwindcss.com/)
-- [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) for
-  type-safe localization
-- [Cloudflare Workers](https://workers.cloudflare.com/) and
-  [Wrangler](https://developers.cloudflare.com/workers/wrangler/)
-- [Vitest](https://vitest.dev/) and [Playwright](https://playwright.dev/)
+可在 Cloudflare 控制台给自己的实例绑定自定义域名；公共默认配置保留 `workers.dev`，不会预填项目维护者的域名或账号。
 
-## Getting started
+密钥只设为 **Cloudflare Secrets**。Key、访问令牌、个人模型配置、本人身份和私人账目不得提交到 Git。[本地配置示例](config/local.vars.example)只有空值，并特意避开部署按钮的密钥自动识别文件名；真实本机配置 `.dev.vars` 必须被 Git 忽略。
 
-### Prerequisites
+## 本地开发与验证
 
-- [Node.js](https://nodejs.org/)
-- [pnpm](https://pnpm.io/) 10.30.3 or later
-
-### Run locally
+使用 Node.js 22.16+、pnpm 10.30.3+。
 
 ```bash
-git clone https://github.com/MkFastHQ/mkfast-lite.git
-cd mkfast-lite
-pnpm install
+pnpm install --frozen-lockfile
+pnpm db:migrate:local
 pnpm dev
 ```
 
-Open `http://localhost:3000` for English or `http://localhost:3000/zh` for
-Simplified Chinese.
-
-### Common commands
-
-| Command | Description |
-| --- | --- |
-| `pnpm dev` | Start the Vite development server on `127.0.0.1:3000` |
-| `pnpm check` | Run Biome checks, locale parity checks, unit tests, and TypeScript |
-| `pnpm test` | Run the Vitest unit suite |
-| `pnpm build` | Create a production build and type-check it |
-| `pnpm e2e` | Run Playwright desktop and mobile coverage |
-| `pnpm locale:compile` | Regenerate the Paraglide runtime after locale edits |
-| `pnpm locale:check` | Check English and Chinese message-key parity |
-| `pnpm cf-typegen` | Regenerate Worker environment types after Wrangler changes |
-| `pnpm deploy` | Build and deploy the Worker |
-
-`pnpm e2e` covers both locales, language switching, theme persistence,
-responsive navigation, FAQ behavior, machine-readable SEO endpoints, and the
-intentionally absent application routes.
-
-## Customize the template
-
-1. Update the site name, canonical URL, repository URL, default theme, and
-   navigation in `src/config/website.ts`.
-2. Edit English and Simplified Chinese copy in
-   `project.inlang/messages/en.json` and `project.inlang/messages/zh.json`.
-3. Replace `public/favicon.svg` and the Open Graph image in `public/`.
-4. Reorder or remove homepage sections in
-   `src/components/home/home-page.tsx`; adjust visual tokens in
-   `src/styles.css` when needed.
-5. Add routes under `src/routes/` with TanStack Router's file-route
-   convention. Add matching English and `/zh` routes, localized metadata, and
-   messages when a page needs localized content.
-
-Locale JSON files are the source of truth. Never edit
-`src/locale/paraglide/` by hand; regenerate it after changing copy:
-
-```bash
-pnpm locale:compile
-pnpm locale:check
-```
-
-Do not edit generated `src/routeTree.gen.ts` or `worker-configuration.d.ts`
-by hand either; regenerate them with the relevant tooling. Set
-`websiteConfig.url` to the production origin before launch. Until then, the
-SEO metadata uses the incoming request origin, keeping local development and
-deployment previews valid.
-
-## Deploy to Cloudflare Workers
-
-Authenticate Wrangler once, then deploy:
-
-```bash
-pnpm exec wrangler login
-pnpm deploy
-```
-
-The committed `wrangler.jsonc` keeps `workers_dev` enabled and contains no
-account ID, custom domain, resource bindings, or application secrets. The
-first deployment publishes to your Cloudflare account's `workers.dev`
-subdomain.
-
-To attach a hostname without making it the template default:
-
-```bash
-pnpm exec wrangler deploy --domain your-site.example.com
-```
-
-Do not commit personal account IDs, tokens, or secrets to a project created
-from this template.
-
-## Architecture
-
-- `src/routes/` — the English and Chinese home pages, 404 handling, and
-  machine-readable endpoints.
-- `src/components/` — layout, language/theme controls, UI primitives, and
-  landing-page sections.
-- `src/config/` — product-owned site identity, repository link, and
-  navigation.
-- `src/lib/` — locale routing, SEO, and utility contracts.
-- `src/styles.css` — shared theme tokens and global styles.
-- `project.inlang/messages/` — authoritative English and Simplified Chinese
-  copy.
-- `scripts/` — locale validation.
-- `tests/` — Vitest unit contracts and Playwright acceptance tests.
-- `wrangler.jsonc` — the Workers entry point and committed deployment default.
-
-## Contributing
-
-Contributions are welcome. Fork the repository, make a focused change, update
-tests and documentation when behavior changes, and run the relevant checks
-before opening a pull request:
+本地浏览器同样要求有效的本人 Access 身份，不提供开发后门。自动化使用独立签名身份和真实本地 D1／DO，不读取 `.dev.vars`：
 
 ```bash
 pnpm check
-pnpm build
 pnpm e2e
-git diff --check
+pnpm check:private
+pnpm deploy:dry-run
 ```
 
-## Author
+`pnpm e2e` 先构建，再运行双端用例；dry-run 必须在构建后运行，只打包不发布。真实服务为单独的显式选择，见 [指南](docs/deployment.md#真实服务检查)。
 
-[OpenFox](https://mksaas.link/fox-x) is an independent developer building
-products and developer tools. His products include:
+| 命令 | 用途 |
+| --- | --- |
+| `pnpm check` | 格式、翻译键、单元、受保护接口／真实本地 D1／DO、类型 |
+| `pnpm build` | 默认 Worker 与静态资源生产构建、类型 |
+| `pnpm build:preview` | 使用独立 preview 绑定构建；替换当前构建输出 |
+| `pnpm locale:compile` | 从中英 JSON 重新生成 Paraglide |
+| `pnpm cf-typegen` | 仅从空白示例重新生成绑定类型 |
+| `pnpm deploy` | 部署已构建产物：远端 D1 迁移、发布 Worker；供 Workers Builds 使用，实际改变云端 |
+| `pnpm deploy:local` | 本机先构建，再迁移和发布默认 Worker，实际改变云端 |
+| `pnpm deploy:preview` | 构建、迁移、发布独立 preview Worker，实际改变云端 |
 
-- [TanStarter](https://tanstarter.dev) — Ship Faster with TanStack, Cost Less with Cloudflare.
-- [MkSaaS](https://mksaas.com) — Make Your AI SaaS Product in a Weekend.
-- [MkImage](https://mkimage.ai) — Make Any Images Possible.
-- [MkAgent](https://mkagent.app) — A local-first, Pi-powered AI agent workspace for Desktop, WebUI, and CLI.
-- [MkExt](https://mkext.dev) — An open-source browser extension starter for SaaS applications.
-- [Mkdirs](https://mkdirs.com) — Launch AI-powered directory in 30 minutes.
-- [MkDollar](https://mkdollar.com) — The all-in-one platform to help you make first dollar online.
+## 项目资料
 
-## License
+- [规格](docs/specs/moni-v0.1.md)、[父 Issue #1](https://github.com/ISheepp/Moni/issues/1)、子任务 #2–#20。
+- [技术方案](docs/technical-design.md)、[阶段计划](docs/implementation-plan.md)、[财务 ADR](docs/adr/)、[领域词汇](GLOSSARY.md)。
+- [批准的双端设计](docs/design/moni-v0.1/REVIEW.md)、[透明素材](public/moni/)、[实现设计核对](design-qa.md)。
+- [部署指南](docs/deployment.md)、[逐项验收证据](docs/verification/v0.1-acceptance.md)。
 
-Licensed under the [MIT License](./LICENSE).
+React 19、TypeScript、TanStack Start／Router／AI、Tailwind、Paraglide、Cloudflare Workers／D1／DO；图标使用 Tabler。生成文件 `src/locale/paraglide/`、`src/routeTree.gen.ts`、`worker-configuration.d.ts` 不手工编辑。
+
+## 致谢与许可
+
+项目从 [TanStarter Lite](https://github.com/MkFastHQ/mkfast-lite) 起步，保留其 MIT 许可及作者版权声明。Moni 依 [MIT License](LICENSE) 开源；素材来源见 [素材说明](docs/design/moni-v0.1/assets/README.md)。

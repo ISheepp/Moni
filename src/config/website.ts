@@ -1,10 +1,10 @@
 export const websiteConfig = {
-  name: 'TanStarter Lite',
-  description: 'A minimal multilingual website starter for Cloudflare Workers.',
+  name: 'Moni',
+  description: 'Your private AI-assisted ledger.',
   url: null as string | null,
-  repository: 'https://github.com/MkFastHQ/mkfast-lite',
+  repository: 'https://github.com/ISheepp/Moni',
   defaultTheme: 'system' as const,
-  themeStorageKey: 'tanstarter-lite-theme',
+  themeStorageKey: 'moni-theme',
   colors: {
     background: '#fff8e8',
     theme: '#ffd84a',

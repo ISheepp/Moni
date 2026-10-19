@@ -10,24 +10,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { websiteConfig } from '@/config/website';
 import { type AppLocale, message } from '@/lib/locale';
-
-type Theme = 'light' | 'dark' | 'system';
+import { applyTheme, type Theme } from '@/lib/theme';
 
 const themes: Array<{ value: Theme; Icon: typeof IconSun }> = [
   { value: 'light', Icon: IconSun },
   { value: 'dark', Icon: IconMoon },
   { value: 'system', Icon: IconDeviceDesktop },
 ];
-
-function applyTheme(theme: Theme) {
-  const dark =
-    theme === 'dark' ||
-    (theme === 'system' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.classList.toggle('dark', dark);
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-}
 
 export function ThemeSwitcher({ locale }: { locale: AppLocale }) {
   const [theme, setTheme] = useState<Theme>(websiteConfig.defaultTheme);
@@ -43,13 +32,6 @@ export function ThemeSwitcher({ locale }: { locale: AppLocale }) {
     setTheme(initial);
     applyTheme(initial);
     setReady(true);
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const sync = () =>
-      document.documentElement.dataset.theme === 'system' &&
-      applyTheme('system');
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
   }, []);
 
   function selectTheme(next: Theme) {
