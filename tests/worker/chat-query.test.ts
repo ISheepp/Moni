@@ -201,6 +201,120 @@ async function ask(
 }
 
 describe('restricted natural-language queries through protected D1/DO chat', () => {
+  it('shows current posted entry details and notes using the previous query conditions, without drafting or posting', async () => {
+    const saved = await entry({ name: '合成明细午餐', note: '肯德基合成明细' });
+    await entry({
+      name: '不符合条件的合成交通',
+      amount: '8',
+      tags: [],
+      note: '',
+    });
+    const thread = await createThread();
+    await ask(thread, query({ filters: { keyword: '合成明细' } }));
+    const before = (await (await api('entries/query', {})).json()) as {
+      total: number;
+      totals: unknown;
+    };
+    const detail = await ask(
+      thread,
+      {
+        ...query(),
+        inheritPrevious: true,
+        period: null,
+        scope: null,
+        filters: {},
+        view: 'entries',
+        interval: null,
+      },
+      '具体的账目给我看一下'
+    );
+    expect(detail.latest).toMatchObject({
+      report: { total: 1, totals: { expense: 3500 } },
+      entries: {
+        page: 1,
+        pageSize: 5,
+        pageCount: 1,
+        items: [
+          {
+            id: saved.id,
+            name: '合成明细午餐',
+            note: '肯德基合成明细',
+            originalMinor: 3500,
+          },
+        ],
+      },
+    });
+    const after = (await (
+      await api('entries/query', {})
+    ).json()) as typeof before;
+    expect(after.total).toBe(before.total);
+    expect(after.totals).toEqual(before.totals);
+    expect(
+      (
+        await (
+          await api(`drafts?threadId=${thread}`)
+        ).json<{ items: unknown[] }>()
+      ).items
+    ).toEqual([]);
+  });
+
+  it('paginates current details, resets page for new conditions and bounds notes without changing full stored notes', async () => {
+    const fullNote = '肯德基'.repeat(200);
+    for (let i = 0; i < 6; i++)
+      await entry({ name: `分页合成${i}`, note: fullNote });
+    const thread = await createThread();
+    const first = await ask(thread, { ...query(), view: 'entries' });
+    expect(first.latest?.entries).toMatchObject({ page: 1, pageCount: 2 });
+    expect(first.latest?.entries?.items).toHaveLength(5);
+    expect(first.latest?.entries?.items[0]).toMatchObject({
+      noteTruncated: true,
+    });
+    expect(Array.from(first.latest?.entries?.items[0].note ?? '')).toHaveLength(
+      200
+    );
+    const second = await ask(thread, {
+      ...query(),
+      inheritPrevious: true,
+      period: null,
+      scope: null,
+      view: 'entries',
+      page: 2,
+    });
+    expect(second.latest?.entries).toMatchObject({ page: 2, pageCount: 2 });
+    expect(second.latest?.entries?.items).toHaveLength(1);
+    expect(first.latest?.entries?.items.map((e) => e.id)).not.toContain(
+      second.latest?.entries?.items[0].id
+    );
+    const model = JSON.parse(
+      modelInputs
+        .at(-1)
+        ?.messages.filter((m) => m.role === 'tool')
+        .at(-1)?.content ?? '{}'
+    );
+    expect(model.entries.items[0]).toMatchObject({
+      originalAmount: 'CNY 35.00',
+      baseAmount: 'CNY 35.00',
+    });
+    expect(model.entries.items[0]).not.toHaveProperty('originalMinor');
+    const reset = await ask(thread, {
+      ...query(),
+      inheritPrevious: true,
+      view: 'entries',
+      filters: { keyword: '分页合成0' },
+      page: null,
+    });
+    expect(reset.latest?.entries).toMatchObject({ page: 1, pageCount: 1 });
+    expect(
+      (
+        await (
+          await api('entries/query', {})
+        ).json<{ items: { note: string }[] }>()
+      ).items.every((e) => e.note === fullNote)
+    ).toBe(true);
+    const summary = await ask(thread, query());
+    expect(summary.latest?.entries).toBeUndefined();
+  });
+
   it.each([
     {
       currency: 'CNY',
@@ -417,6 +531,58 @@ describe('restricted natural-language queries through protected D1/DO chat', () 
     ).json()) as { total: number; totals: unknown };
     expect(detail.total).toBe(2);
     expect(detail.totals).toEqual(usd.latest?.report.totals);
+    const listed = await ask(thread, {
+      ...query(),
+      inheritPrevious: true,
+      period: null,
+      scope: null,
+      view: 'entries',
+      interval: null,
+    });
+    expect(listed.latest?.entries?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: foreign.id,
+          currency: 'USD',
+          originalMinor: 2000,
+          baseMinor: 14400,
+          note: '独立外币备注',
+        }),
+        expect.objectContaining({
+          kind: 'refund',
+          currency: 'USD',
+          originalMinor: 500,
+          baseMinor: 3600,
+          note: '独立合成外币退款',
+          date: today,
+        }),
+      ])
+    );
+    expect(
+      (
+        await api(
+          'entries',
+          {
+            ...foreign,
+            ...command(),
+            version: 1,
+            note: '更新后的独立外币备注',
+          },
+          'PUT'
+        )
+      ).status
+    ).toBe(200);
+    const refreshed = await ask(thread, {
+      ...query(),
+      inheritPrevious: true,
+      period: null,
+      scope: null,
+      view: 'entries',
+      interval: null,
+    });
+    expect(
+      refreshed.latest?.entries?.items.find((e) => e.id === foreign.id)?.note
+    ).toBe('更新后的独立外币备注');
   });
 
   it('requeries edited notes and deletion state rather than reusing earlier answers, with explicit empty-record semantics', async () => {

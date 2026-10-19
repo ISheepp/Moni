@@ -7,6 +7,7 @@ import {
 import { conversationIntent } from '../lib/conversation-intent';
 import { HttpError } from '../lib/http';
 import { type AppLocale, message } from '../lib/locale';
+import { previousLedgerQuery } from './chat-query';
 import {
   confirmDraftReview,
   type DraftReview,
@@ -75,7 +76,12 @@ export async function webDraftReply(
   const decision = await conversationIntent(
     env,
     text,
-    reviewContext(reviewed, review, drafts),
+    {
+      ...reviewContext(reviewed, review, drafts),
+      previousQuery:
+        (await previousLedgerQuery(env.DB, datasetId, permit.threadId))
+          ?.query ?? null,
+    },
     signal
   );
   await assertChatExecution(env.DB, datasetId, permit, signal);

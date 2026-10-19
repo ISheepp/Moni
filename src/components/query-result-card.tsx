@@ -108,13 +108,15 @@ export function QueryResultCard({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="text-xl font-extrabold after:mt-2 after:block after:h-1 after:w-8 after:rounded-full after:bg-yellow">
           {t(
-            query.view === 'categories'
-              ? 'nl_query_categories'
-              : query.view === 'tags'
-                ? 'nl_query_tags'
-                : query.view === 'trend'
-                  ? 'nl_query_trend'
-                  : 'nl_query_title'
+            query.view === 'entries'
+              ? 'nl_query_entries'
+              : query.view === 'categories'
+                ? 'nl_query_categories'
+                : query.view === 'tags'
+                  ? 'nl_query_tags'
+                  : query.view === 'trend'
+                    ? 'nl_query_trend'
+                    : 'nl_query_title'
           )}
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -284,6 +286,78 @@ export function QueryResultCard({
               ))}
             </tbody>
           </table>
+        </section>
+      )}
+      {query.view === 'entries' && result.entries && (
+        <section aria-label={t('nl_query_entries')} className="my-4">
+          <p className="mb-3 text-sm text-muted-foreground">
+            {t('nl_query_page')} {result.entries.page} /{' '}
+            {Math.max(1, result.entries.pageCount)}
+            {result.entries.page < result.entries.pageCount
+              ? ` · ${t('nl_query_next_hint')}`
+              : ''}
+          </p>
+          <ul className="divide-y divide-muted rounded-xl border border-foreground/30 px-4">
+            {result.entries.items.map((entry) => (
+              <li key={entry.id}>
+                <Link
+                  to="/"
+                  search={{ view: 'entries', entry: entry.id, filters }}
+                  className="block rounded-lg py-4 focus-visible:outline-4 focus-visible:outline-focus"
+                >
+                  <div className="flex flex-wrap justify-between gap-3 font-bold">
+                    <span className="min-w-0 break-words">{entry.name}</span>
+                    <span className="tabular-nums">
+                      {displayMoney(
+                        entry.originalMinor,
+                        entry.currency,
+                        locale
+                      )}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {entry.date} ·{' '}
+                    {t(
+                      entry.kind === 'income'
+                        ? 'entry_income'
+                        : entry.kind === 'refund'
+                          ? 'query_refund'
+                          : 'entry_expense'
+                    )}{' '}
+                    ·{' '}
+                    {categoryLabel(
+                      entry.categoryName,
+                      entry.categoryKey,
+                      locale
+                    )}
+                  </p>
+                  {entry.currency !== report.primaryCurrency && (
+                    <p className="mt-2 text-sm">
+                      {t('query_equivalent')}{' '}
+                      {displayMoney(
+                        entry.baseMinor,
+                        report.primaryCurrency,
+                        locale
+                      )}
+                    </p>
+                  )}
+                  {!!entry.tags.length && (
+                    <p className="mt-2 break-words text-sm">
+                      {t('entry_tags')}：{entry.tags.join(' · ')}
+                    </p>
+                  )}
+                  {entry.note && (
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm">
+                      {t('entry_note')}：{entry.note}
+                      {entry.noteTruncated
+                        ? ` · ${t('nl_query_note_excerpt')}`
+                        : ''}
+                    </p>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       <div className="grid gap-3 md:grid-cols-[1.3fr_1fr]">

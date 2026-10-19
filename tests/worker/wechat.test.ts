@@ -456,6 +456,100 @@ async function reviewPendingBatch() {
 }
 
 describe('WeChat SDK and protected channel', () => {
+  it.each([
+    false,
+    true,
+  ])('routes posted-entry detail followups through the classifier and sends actual records with pending drafts=%s', async (withPending) => {
+    const { threadId } = await connect('zh');
+    expect(
+      (
+        await api('entries', {
+          datasetId,
+          operationId: crypto.randomUUID(),
+          id: crypto.randomUUID(),
+          kind: 'expense',
+          name: '合成肯德基午餐',
+          amount: '35',
+          currency: 'CNY',
+          date: '2026-10-19',
+          categoryId: 'expense-food',
+          tags: ['合成外卖'],
+          note: '在肯德基吃的 · 合成明细',
+        })
+      ).status
+    ).toBe(200);
+    if (withPending) {
+      action = 'draft';
+      await receive([inbound('pending-before-details', '合成待确认午餐35')]);
+      await tick();
+      action = 'text';
+    }
+    modelTools = [
+      {
+        name: 'query_ledger',
+        input: {
+          inheritPrevious: false,
+          period: { kind: 'custom', from: '2026-10-19', to: '2026-10-19' },
+          scope: 'spending',
+          filters: { keyword: '合成明细' },
+          view: 'summary',
+          interval: 'day',
+        },
+      },
+    ];
+    await receive([inbound('posted-summary', '看一下我今天花了多少钱')]);
+    await tick();
+    modelTools = [
+      {
+        name: 'query_ledger',
+        input: {
+          inheritPrevious: true,
+          period: null,
+          scope: null,
+          filters: {},
+          view: 'entries',
+          interval: null,
+        },
+      },
+    ];
+    const classifications = intentInputs.length;
+    await receive([inbound('posted-details', '具体的账目给我看一下')]);
+    await tick();
+    expect(intentInputs.length).toBe(classifications + 1);
+    const input = intentInputs.at(-1) as {
+      messages: { role: string; content: string }[];
+    };
+    const context = JSON.parse(
+      input.messages.find((message) => message.role === 'user')?.content ?? '{}'
+    );
+    expect(context.review.previousQuery).toMatchObject({
+      filters: { keyword: '合成明细' },
+      view: 'summary',
+    });
+    const reply =
+      (await sendBodies()).at(-1)?.msg.item_list[0].text_item.text ?? '';
+    expect(reply).toContain('账目明细');
+    expect(reply).toContain('合成肯德基午餐');
+    expect(reply).toContain('在肯德基吃的');
+    expect(reply).toContain('¥35.00');
+    expect(reply).not.toContain('没有待确认草稿');
+    expect(reply).not.toContain('Synthetic saved answer');
+    expect(await (await api('entries')).json()).toHaveLength(1);
+    expect(
+      (
+        await (
+          await api(`drafts?threadId=${threadId}`)
+        ).json<{ items: Draft[] }>()
+      ).items.filter((draft) => draft.status === 'ready')
+    ).toHaveLength(withPending ? 1 : 0);
+    intentResult = 'review_pending';
+    await receive([inbound('explicit-draft-review', '还有哪些待确认草稿')]);
+    await tick();
+    const reviewed =
+      (await sendBodies()).at(-1)?.msg.item_list[0].text_item.text ?? '';
+    expect(reviewed).toContain(withPending ? '已整理为草稿' : '没有待确认草稿');
+  });
+
   it('can bind before AI setup, then uses web configuration for drafting and confirmation', async () => {
     try {
       await clearAiSettings(env, { version: 0, confirmed: true });

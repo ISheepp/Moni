@@ -236,6 +236,53 @@ try {
       ['ready', 'needs_details'].includes(draft.status)
     );
   async function scenario() {
+    if (process.argv.includes('--details')) {
+      const date = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+      await api('entries', {
+        datasetId: 'initial',
+        operationId: crypto.randomUUID(),
+        id: crypto.randomUUID(),
+        kind: 'expense',
+        name: '合成肯德基午餐',
+        amount: '35',
+        currency: 'CNY',
+        date,
+        categoryId: 'expense-food',
+        tags: ['合成外卖'],
+        note: '在肯德基吃的 · synthetic-details-only',
+      });
+      stage = 'summary_before_details';
+      await send('看一下我今天花了多少钱');
+      assert.ok(replies.at(-1).includes('35.00'));
+      stage = 'posted_entry_details';
+      await send('具体的账目给我看一下');
+      assert.ok(!replies.at(-1).includes('没有待确认草稿'));
+      assert.ok(replies.at(-1).includes('合成肯德基午餐'));
+      assert.ok(replies.at(-1).includes('在肯德基吃的'));
+      assert.equal((await entries()).length, 1);
+      verified.push(stage);
+      stage = 'explicit_empty_drafts';
+      await send('还有哪些没入账的草稿');
+      assert.ok(replies.at(-1).includes('没有待确认草稿'));
+      verified.push(stage);
+      stage = 'details_with_pending_draft';
+      await send(
+        '新增一笔合成车费8元人民币，备注 synthetic-pending-only，先作为待确认草稿。'
+      );
+      assert.equal((await editable()).length, 1);
+      await send('列出今天已入账的具体账目和备注');
+      assert.ok(replies.at(-1).includes('合成肯德基午餐'));
+      assert.ok(replies.at(-1).includes('在肯德基吃的'));
+      assert.equal((await entries()).length, 1);
+      assert.equal((await editable()).length, 1);
+      verified.push(stage);
+      return;
+    }
     if (process.argv.includes('--mixed')) {
       stage = 'empty_confirmation';
       const beforeEmpty = modelCalls;

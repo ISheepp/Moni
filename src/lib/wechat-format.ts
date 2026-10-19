@@ -16,13 +16,15 @@ export function wechatStatistics(result: LedgerQueryResult, locale: AppLocale) {
   const colon = locale === 'zh' ? '：' : ': ';
   const { query, report, criteria } = result;
   const title = t(
-    query.view === 'categories'
-      ? 'nl_query_categories'
-      : query.view === 'tags'
-        ? 'nl_query_tags'
-        : query.view === 'trend'
-          ? 'nl_query_trend'
-          : 'nl_query_title'
+    query.view === 'entries'
+      ? 'nl_query_entries'
+      : query.view === 'categories'
+        ? 'nl_query_categories'
+        : query.view === 'tags'
+          ? 'nl_query_tags'
+          : query.view === 'trend'
+            ? 'nl_query_trend'
+            : 'nl_query_title'
   );
   const range =
     query.period.kind === 'all_time'
@@ -131,6 +133,36 @@ export function wechatStatistics(result: LedgerQueryResult, locale: AppLocale) {
                     locale
                   ),
           }));
+  if (query.view === 'entries' && result.entries) {
+    const { entries } = result;
+    body += `\n\n${t('nl_query_page')} ${entries.page} / ${entries.pageCount}`;
+    let shown = 0;
+    for (const entry of entries.items) {
+      const kind = t(
+        entry.kind === 'income'
+          ? 'entry_income'
+          : entry.kind === 'refund'
+            ? 'query_refund'
+            : 'entry_expense'
+      );
+      const note = entry.note
+        ? `\n${t('entry_note')}${colon}${literal(entry.note)}${entry.noteTruncated ? ` · ${t('nl_query_note_excerpt')}` : ''}`
+        : '';
+      const block = `\n\n**${literal(entry.name)} · ${displayMoney(entry.originalMinor, entry.currency, locale)}**\n${entry.date} · ${kind} · ${literal(categoryLabel(entry.categoryName, entry.categoryKey, locale))}${entry.currency !== report.primaryCurrency ? `\n${t('query_equivalent')}${colon}${displayMoney(entry.baseMinor, report.primaryCurrency, locale)}` : ''}${entry.tags.length ? `\n${t('entry_tags')}${colon}${literal(entry.tags.join(' · '))}` : ''}${note}`;
+      if (
+        `${body}${block}\n\n${footer}\n\n${t('nl_query_entries_partial')}`
+          .length > 2300
+      )
+        break;
+      body += block;
+      shown++;
+    }
+    if (shown < entries.items.length)
+      body += `\n\n${t('nl_query_entries_partial')}`;
+    else if (entries.page < entries.pageCount)
+      body += `\n\n${t('nl_query_next_hint')}`;
+    return `${body}\n\n---\n\n${footer}`;
+  }
   const visible =
     query.view === 'trend' ? rows.slice(-12).reverse() : rows.slice(0, 12);
   const blocks: string[] = [];

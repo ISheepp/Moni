@@ -116,6 +116,79 @@ describe('shared model money input', () => {
 });
 
 describe('WeChat formatted statistics', () => {
+  it('shows posted entry names, original and converted amounts, own notes and page hints with literal Markdown escaped', () => {
+    const data = result();
+    data.query.view = 'entries';
+    data.entries = {
+      page: 1,
+      pageSize: 5,
+      pageCount: 2,
+      items: [
+        {
+          id: crypto.randomUUID(),
+          name: '*合成午餐*',
+          date: '2026-03-01',
+          kind: 'expense',
+          currency: 'USD',
+          originalMinor: 2000,
+          baseMinor: 14400,
+          categoryName: 'Food',
+          categoryKey: 'food',
+          tags: ['[外卖]'],
+          note: '在肯德基吃的 [菜单](https://example.invalid)',
+          noteTruncated: true,
+        },
+      ],
+    };
+    const text = wechatStatistics(data, 'zh');
+    expect(text).toContain('账目明细');
+    expect(text).toContain('\\*合成午餐\\*');
+    expect(text).toContain('$20.00');
+    expect(text).toContain('¥144.00');
+    expect(text).toContain('在肯德基吃的');
+    expect(text).toContain('备注节选');
+    expect(text).toContain('页码 1 / 2');
+    expect(text).toContain('下一页');
+    expect(text).not.toContain('没有待确认草稿');
+    const original = JSON.stringify(data);
+    const input: ModelMessage = { role: 'tool', content: original };
+    const shown = JSON.parse(modelMoney(input).content as string);
+    expect(shown.entries.items[0]).toMatchObject({
+      originalAmount: 'USD 20.00',
+      baseAmount: 'CNY 144.00',
+    });
+    expect(shown.entries.items[0]).not.toHaveProperty('baseMinor');
+    expect(JSON.stringify(data)).toBe(original);
+  });
+
+  it('bounds long detail replies without silently truncating an entry into another page', () => {
+    const data = result();
+    data.query.view = 'entries';
+    data.entries = {
+      page: 1,
+      pageSize: 5,
+      pageCount: 1,
+      items: Array.from({ length: 5 }, (_, i) => ({
+        id: crypto.randomUUID(),
+        name: `合成${i}${'*'.repeat(115)}`,
+        date: '2026-03-01',
+        kind: 'expense' as const,
+        currency: 'CNY' as const,
+        originalMinor: 3500,
+        baseMinor: 3500,
+        categoryName: 'Food',
+        categoryKey: 'food',
+        tags: ['*'.repeat(30)],
+        note: '*'.repeat(200),
+        noteTruncated: true,
+      })),
+    };
+    const text = wechatStatistics(data, 'zh');
+    expect(text.length).toBeLessThanOrEqual(2300);
+    expect(text).toContain('本页部分明细');
+    expect(text).not.toContain('下一页');
+  });
+
   it('reads old persisted query results and multi-report refreshes without losing failed report identifiers', () => {
     const query = result();
     const failed = crypto.randomUUID();

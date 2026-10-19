@@ -192,6 +192,20 @@ test('dated query cards retain filters, separate currencies, survive reload, and
     sixth.getByText(/This does not mean there was no actual spending/)
   ).toBeVisible();
   await expect(sixth.getByText('CN¥0.00', { exact: true })).toHaveCount(0);
+  const seventh = await ask({ ...base, view: 'entries' }, 7);
+  const details = seventh.getByRole('region', {
+    name: 'Entry details',
+    exact: true,
+  });
+  await expect(details).toContainText('Synthetic lunch');
+  await expect(details).toContainText('Synthetic KFC note');
+  await expect(details).toContainText('$20.00');
+  await expect(details).toContainText('CN¥144.00');
+  await page.reload();
+  await expect(results).toHaveCount(7);
+  await expect(
+    results.last().getByRole('region', { name: 'Entry details', exact: true })
+  ).toContainText('Synthetic KFC note');
   if (isMobile) await page.setViewportSize({ width: 320, height: 700 });
   expect(
     await page.evaluate(

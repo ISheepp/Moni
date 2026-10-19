@@ -33,8 +33,11 @@ export const ledgerQueryInput = z
     period: queryPeriod.nullable(),
     scope: z.enum(['spending', 'income', 'all']).nullable(),
     filters: queryFilterPatch,
-    view: z.enum(['summary', 'categories', 'tags', 'trend']).nullable(),
+    view: z
+      .enum(['summary', 'categories', 'tags', 'trend', 'entries'])
+      .nullable(),
     interval: z.enum(['day', 'week', 'month']).nullable(),
+    page: z.number().int().min(1).max(5000).nullable().optional(),
   })
   .strict();
 export type LedgerQueryInput = z.infer<typeof ledgerQueryInput>;
@@ -42,7 +45,7 @@ export const resolvedLedgerQuery = ledgerQueryInput.extend({
   inheritPrevious: z.literal(false),
   period: queryPeriod,
   scope: z.enum(['spending', 'income', 'all']),
-  view: z.enum(['summary', 'categories', 'tags', 'trend']),
+  view: z.enum(['summary', 'categories', 'tags', 'trend', 'entries']),
   interval: z.enum(['day', 'week', 'month']),
 });
 const integer = z
@@ -113,6 +116,34 @@ export const ledgerQueryResult = z
       })
       .strict(),
     report,
+    entries: z
+      .object({
+        page: count.min(1).max(5000),
+        pageSize: z.literal(5),
+        pageCount: count,
+        items: z
+          .array(
+            z
+              .object({
+                id: z.uuid(),
+                name: z.string().max(120),
+                date: entryDate,
+                kind: z.enum(['income', 'expense', 'refund']),
+                currency: z.enum(currencies),
+                originalMinor: count,
+                baseMinor: count,
+                categoryName: z.string(),
+                categoryKey: z.string().nullable(),
+                tags: z.array(z.string()).max(10),
+                note: z.string().max(400),
+                noteTruncated: z.boolean(),
+              })
+              .strict()
+          )
+          .max(5),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type LedgerQueryResult = z.infer<typeof ledgerQueryResult>;

@@ -14,10 +14,38 @@ import {
   parseQueryUpdates,
 } from './chat-query-contract';
 import { resolveDatePeriod, shiftMonth, todayInZone } from './dates';
-import { entryFilters } from './entry-query';
-import { queryReport } from './reports';
+import { entryFilters, queryEntries } from './entry-query';
+import { queryReport, type Report } from './reports';
 import { readSettings } from './settings';
 import { readTaxonomy } from './taxonomy';
+
+async function readQueryEntries(db: D1Database, report: Report, page: number) {
+  const data = await queryEntries(db, { ...report.filters, page, pageSize: 5 });
+  if (data.datasetId !== report.datasetId || data.revision !== report.revision)
+    throw new HttpError(409, 'conversation_changed');
+  return {
+    page,
+    pageSize: 5 as const,
+    pageCount: data.pageCount,
+    items: data.items.map((entry) => {
+      const note = Array.from(entry.note);
+      return {
+        id: entry.id,
+        name: entry.name,
+        date: entry.date,
+        kind: entry.kind,
+        currency: entry.currency,
+        originalMinor: entry.originalMinor,
+        baseMinor: entry.baseMinor,
+        categoryName: entry.categoryName,
+        categoryKey: entry.categoryKey,
+        tags: entry.tags.map((tag) => tag.name),
+        note: note.slice(0, 200).join(''),
+        noteTruncated: note.length > 200,
+      };
+    }),
+  };
+}
 
 export function resolveQueryPeriod(
   period: NonNullable<LedgerQueryInput['period']>,
@@ -100,6 +128,9 @@ export async function refreshLedgerQuery(
   const result = ledgerQueryResult.parse({
     ...query,
     asOf: Date.now(),
+    ...(query.query.view === 'entries'
+      ? { entries: await readQueryEntries(db, report, query.query.page ?? 1) }
+      : {}),
     report: {
       ...report,
       groups: ['categories', 'tags'].includes(query.query.view)
@@ -149,6 +180,11 @@ export async function runLedgerQuery(
   const scope = input.scope ?? inherited?.scope ?? 'spending';
   const view = input.view ?? inherited?.view ?? 'summary';
   const interval = input.interval ?? inherited?.interval ?? 'week';
+  const page =
+    input.page ??
+    (input.period || Object.keys(input.filters).length
+      ? 1
+      : (inherited?.page ?? 1));
   const category = filters.categoryId
     ? taxonomy.categories.find((item) => item.id === filters.categoryId)
     : null;
@@ -219,7 +255,18 @@ export async function runLedgerQuery(
     type: 'ledger_query',
     id: crypto.randomUUID(),
     asOf: Date.now(),
-    query: { inheritPrevious: false, period, scope, filters, view, interval },
+    query: {
+      inheritPrevious: false,
+      period,
+      scope,
+      filters,
+      view,
+      interval,
+      ...(view === 'entries' ? { page } : {}),
+    },
+    ...(view === 'entries'
+      ? { entries: await readQueryEntries(db, report, page) }
+      : {}),
     criteria: {
       category: category
         ? { name: category.name, defaultKey: category.defaultKey }

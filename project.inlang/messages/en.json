@@ -544,5 +544,10 @@
   "ai_saved": "AI configuration saved. The key is no longer shown.",
   "ai_tested": "Connection test passed. This only tests a short synthetic reply; save the configuration to apply it.",
   "ai_cleared": "AI configuration cleared. Manual entries remain available.",
-  "wechat_ai_setup_hint": "You can connect WeChat now. Configure AI in Moni Settings before sending natural-language entries or ledger questions."
+  "wechat_ai_setup_hint": "You can connect WeChat now. Configure AI in Moni Settings before sending natural-language entries or ledger questions.",
+  "nl_query_entries": "Entry details",
+  "nl_query_page": "Page",
+  "nl_query_note_excerpt": "Note excerpt",
+  "nl_query_entries_partial": "Only part of this page is shown. Open Moni on the web for complete details.",
+  "nl_query_next_hint": "Ask “next page” to see more entries."
 }

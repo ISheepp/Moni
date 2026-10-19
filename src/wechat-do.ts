@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { ModelMessage } from '@tanstack/ai';
 import { z } from 'zod';
-import { refreshLedgerQuery } from './ledger/chat-query';
+import { previousLedgerQuery, refreshLedgerQuery } from './ledger/chat-query';
 import {
   type LedgerQueryResult,
   parseQueryUpdates,
@@ -942,11 +942,17 @@ export class WechatBot extends DurableObject<Env> {
       return message('wechat_ai_setup_hint', delivery.locale);
     const decision =
       delivery.confirmationIntent ??
-      (await conversationIntent(
-        this.env,
-        delivery.text,
-        reviewContext(reviewed, review, drafts)
-      ));
+      (await conversationIntent(this.env, delivery.text, {
+        ...reviewContext(reviewed, review, drafts),
+        previousQuery:
+          (
+            await previousLedgerQuery(
+              this.env.DB,
+              state.datasetId,
+              state.threadId
+            )
+          )?.query ?? null,
+      }));
     await this.current(state, delivery.threadId);
     const t = (key: Parameters<typeof message>[0]) =>
       message(key, delivery.locale);

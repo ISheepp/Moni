@@ -32,6 +32,20 @@ function queryMoney(value: unknown): unknown {
   });
   return {
     ...result,
+    ...(result.entries
+      ? {
+          entries: {
+            ...result.entries,
+            items: result.entries.items.map(
+              ({ originalMinor, baseMinor, ...entry }) => ({
+                ...entry,
+                originalAmount: amount(originalMinor, entry.currency),
+                baseAmount: amount(baseMinor, report.primaryCurrency),
+              })
+            ),
+          },
+        }
+      : {}),
     report: {
       ...aggregate(report),
       groups: report.groups.map(({ filters: _filters, ...row }) =>
