@@ -135,6 +135,81 @@ it('stops after 15 plus 30 seconds without granting permission or making a third
   expect(provider.fetcher).toHaveBeenCalledTimes(2);
 });
 
+it('enforces both deadlines even when the provider never reacts to cancellation', async () => {
+  vi.useFakeTimers();
+  const fetcher = vi.fn(() => new Promise<Response>(() => {}));
+  vi.stubGlobal('fetch', fetcher);
+  let finished = false;
+  const result = conversationIntent(env, '具体的账目给我看一下', review).then(
+    (value) => {
+      finished = true;
+      return value;
+    }
+  );
+  await vi.advanceTimersByTimeAsync(15000);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(finished).toBe(false);
+  await vi.advanceTimersByTimeAsync(30000);
+  expect(finished).toBe(true);
+  expect(await result).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it('returns immediately on owner cancellation even if the provider ignores abort', async () => {
+  vi.useFakeTimers();
+  const fetcher = vi.fn(() => new Promise<Response>(() => {}));
+  vi.stubGlobal('fetch', fetcher);
+  const controller = new AbortController();
+  let finished = false;
+  const result = conversationIntent(
+    env,
+    '确认',
+    review,
+    controller.signal
+  ).then((value) => {
+    finished = true;
+    return value;
+  });
+  await vi.advanceTimersByTimeAsync(1000);
+  controller.abort();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(finished).toBe(true);
+  expect(await result).toBeNull();
+  await vi.advanceTimersByTimeAsync(45000);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it('ignores a late approval from an expired attempt while a fresh classification is running', async () => {
+  vi.useFakeTimers();
+  const releases: ((response: Response) => void)[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          releases.push(resolve);
+        })
+    )
+  );
+  let finished = false;
+  const result = conversationIntent(env, '具体账目', review).then((value) => {
+    finished = true;
+    return value;
+  });
+  await vi.advanceTimersByTimeAsync(15000);
+  expect(releases).toHaveLength(2);
+  const response = (value: string) =>
+    new Response(
+      `data: ${JSON.stringify({ choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: crypto.randomUUID(), type: 'function', function: { name: 'classify_draft_confirmation', arguments: JSON.stringify({ intent: value }) } }] }, finish_reason: 'tool_calls' }] })}\n\ndata: [DONE]\n\n`,
+      { headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  releases[0](response('confirm'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(finished).toBe(false);
+  releases[1](response('other'));
+  expect(await result).toBe('other');
+});
+
 it.each([
   ['conflicting decisions', ['{"intent":"confirm"}', '{"intent":"other"}']],
   ['invalid later decision', ['{"intent":"confirm"}', '{"intent":"invalid"}']],
