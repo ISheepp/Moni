@@ -245,7 +245,11 @@ test('dated query cards retain filters, separate currencies, survive reload, and
       .getByText('Synthetic KFC note', { exact: true })
       .filter({ visible: true })
   ).toBeVisible();
-  await expect(page.getByLabel('Type', { exact: true })).toHaveValue(
-    'spending'
-  );
+  if (isMobile)
+    await page
+      .getByRole('button', { name: 'More filters', exact: true })
+      .click();
+  await expect(
+    page.getByRole('combobox', { name: 'Type', exact: true })
+  ).toHaveText('Expenses and refunds');
 });
