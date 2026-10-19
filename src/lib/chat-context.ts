@@ -11,13 +11,17 @@ import {
   withCompaction,
 } from '@tanstack/ai-compaction';
 import { openaiCompatible } from '@tanstack/ai-openai/compatible';
+import { modelMoney } from '../ledger/model-money';
 import { aiConfiguration } from './ai-settings';
 import { HttpError } from './http';
 import { limits } from './limits';
 
 // Conservative for Chinese and JSON; reserve the rest of the model window for tools/output.
 export const contextTokens = (message: ModelMessage) =>
-  32 + Math.ceil(new TextEncoder().encode(JSON.stringify(message)).length / 2);
+  32 +
+  Math.ceil(
+    new TextEncoder().encode(JSON.stringify(modelMoney(message))).length / 2
+  );
 const total = (messages: readonly ModelMessage[]) =>
   messages.reduce((n, message) => n + contextTokens(message), 0);
 
@@ -92,7 +96,7 @@ async function summarizeHistory(
             role: 'user',
             content: JSON.stringify({
               previousSummary: summary,
-              messages: batch,
+              messages: batch.map(modelMoney),
             }),
           },
         ],
@@ -192,7 +196,10 @@ export function conversationContext(
         JSON.stringify(projected.slice(-tail.length)) !== JSON.stringify(tail)
       )
         throw new HttpError(413, 'context_limit');
-      return { providerMessages: projected };
+      const providerMessages = projected.map(modelMoney);
+      if (total(providerMessages) > limits.contextTokens)
+        throw new HttpError(413, 'context_limit');
+      return { providerMessages };
     },
   };
 }

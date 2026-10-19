@@ -1224,7 +1224,15 @@ describe('AI drafts through protected chat and explicit owner commands', () => {
     await permission(mode);
     const threadId = crypto.randomUUID();
     await api('conversations', { ...command(), id: threadId });
-    let prepared: { status: string; queryUpdates?: unknown[] } | undefined;
+    let prepared:
+      | {
+          status: string;
+          totalBaseAmount?: string;
+          queryUpdates?: {
+            result: { report: { totals: { expense: string } } } | null;
+          }[];
+        }
+      | undefined;
     replies.push(
       {
         name: 'query_ledger',
@@ -1256,10 +1264,20 @@ describe('AI drafts through protected chat and explicit owner commands', () => {
     });
     expect(await response.text()).toContain('RUN_FINISHED');
     expect(prepared?.status).toBe(mode === 'automatic' ? 'posted' : 'ready');
-    if (mode === 'automatic')
-      expect(
-        parseQueryUpdates(prepared)[0]?.result?.report.totals.expense
-      ).toBe(3500);
+    expect(prepared?.totalBaseAmount).toBe('CNY 35.00');
+    if (mode === 'automatic') {
+      expect(prepared?.queryUpdates?.[0].result?.report.totals.expense).toBe(
+        'CNY 35.00'
+      );
+      const history = await chatPersistence(
+        env.DB,
+        datasetId
+      ).stores.messages.loadThread(threadId);
+      const persisted = history
+        .filter((message) => message.role === 'tool')
+        .flatMap((message) => parseQueryUpdates(message.content));
+      expect(persisted.at(-1)?.result?.report.totals.expense).toBe(3500);
+    }
     expect((await entries()).total).toBe(mode === 'automatic' ? 1 : 0);
   });
   it('bounds combined refreshed reports and keeps a durable posting when not every result fits', async () => {

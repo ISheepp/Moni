@@ -23,6 +23,7 @@ let signingKey: CryptoKey;
 let datasetId: string;
 let modelCalls = 0;
 const replies: { tool?: Record<string, unknown>; text?: string }[] = [];
+const modelInputs: { messages: { role: string; content: string }[] }[] = [];
 beforeAll(async () => {
   const keys = await generateKeyPair('RS256', { extractable: true });
   signingKey = keys.privateKey;
@@ -54,6 +55,7 @@ beforeAll(async () => {
           { headers: { 'Content-Type': 'text/event-stream' } }
         );
       modelCalls++;
+      modelInputs.push(body);
       expect(
         body.tools?.some((tool) => tool.function.name === 'query_ledger')
       ).toBe(true);
@@ -116,6 +118,7 @@ async function api(path: string, body?: unknown, method = 'POST') {
 beforeEach(async () => {
   expect(replies).toHaveLength(0);
   modelCalls = 0;
+  modelInputs.length = 0;
   datasetId = crypto.randomUUID();
   await env.DB.batch([
     env.DB.prepare('INSERT INTO datasets(id) VALUES (?)').bind(datasetId),
@@ -198,6 +201,64 @@ async function ask(
 }
 
 describe('restricted natural-language queries through protected D1/DO chat', () => {
+  it.each([
+    {
+      currency: 'CNY',
+      amount: '35',
+      rate: '1',
+      baseMinor: 3500,
+      shown: 'CNY 35.00',
+    },
+    {
+      currency: 'JPY',
+      amount: '3500',
+      rate: '0.05',
+      baseMinor: 17500,
+      shown: 'JPY 3500',
+    },
+    {
+      currency: 'KWD',
+      amount: '1.005',
+      rate: '20',
+      baseMinor: 2010,
+      shown: 'KWD 1.005',
+    },
+  ] as const)('sends $currency amounts to the model in explicit major units without changing stored minor units', async ({
+    currency,
+    amount,
+    rate,
+    baseMinor,
+    shown,
+  }) => {
+    await entry({
+      amount,
+      currency,
+      note: '',
+      ...(currency === 'CNY'
+        ? {}
+        : { conversion: { rate }, confirmedBaseMinor: baseMinor }),
+    });
+    const thread = await createThread();
+    const result = await ask(
+      thread,
+      query({ filters: { currency }, view: 'categories' })
+    );
+    expect(result.latest?.report.totals.expense).toBe(baseMinor);
+    const tool = modelInputs
+      .at(-1)
+      ?.messages.filter((item) => item.role === 'tool')
+      .at(-1);
+    const presented = JSON.parse(tool?.content ?? '{}');
+    expect(presented.report.totals.expense).toBe(
+      `CNY ${(baseMinor / 100).toFixed(2)}`
+    );
+    expect(presented.report.originalTotals.expense).toBe(shown);
+    expect(presented.report.groups[0].originalTotals.expense).toBe(shown);
+    expect(result.latest?.report.originalTotals?.expense).toBe(
+      currency === 'CNY' ? 3500 : currency === 'JPY' ? 3500 : 1005
+    );
+  });
+
   it('inherits authoritative filters beyond the model window and queries current amounts after compaction', async () => {
     const month = shiftMonth(todayInZone('Asia/Shanghai').slice(0, 7), -1);
     await entry({ amount: '10', date: `${month}-01`, note: '' });

@@ -1,8 +1,10 @@
+import type { ModelMessage } from '@tanstack/ai';
 import { describe, expect, it } from 'vitest';
 import {
   ledgerQueryResult,
   parseQueryUpdates,
 } from '../../src/ledger/chat-query-contract';
+import { modelMoney } from '../../src/ledger/model-money';
 import { wechatStatistics } from '../../src/lib/wechat-format';
 
 function result() {
@@ -36,6 +38,82 @@ function result() {
     },
   });
 }
+
+describe('shared model money input', () => {
+  it('formats draft receipts and refreshed reports without mutating persisted financial results', () => {
+    const query = result();
+    query.report.totals.netExpense = -1;
+    query.report.trend = [
+      {
+        total: query.report.total,
+        counts: query.report.counts,
+        totals: query.report.totals,
+        originalTotals: null,
+        filters: query.report.filters,
+        from: '2026-01-01',
+        to: '2026-03-31',
+      },
+    ];
+    const failed = crypto.randomUUID();
+    const input: ModelMessage = {
+      role: 'tool',
+      toolCallId: 'synthetic',
+      content: JSON.stringify({
+        draftId: crypto.randomUUID(),
+        status: 'posted',
+        version: 1,
+        baseCurrency: 'CNY',
+        totalBaseMinor: 3500,
+        queryUpdates: [
+          { id: query.id, result: query },
+          { id: failed, result: null },
+        ],
+      }),
+    };
+    const before = JSON.stringify(input);
+    const shown = JSON.parse(modelMoney(input).content as string);
+    expect(shown.totalBaseAmount).toBe('CNY 35.00');
+    expect(shown).not.toHaveProperty('totalBaseMinor');
+    expect(shown).toMatchObject({ status: 'posted', version: 1 });
+    expect(shown.queryUpdates[0].result.report.totals.netExpense).toBe(
+      'CNY -0.01'
+    );
+    expect(shown.queryUpdates[0].result.report.trend[0].totals.netExpense).toBe(
+      'CNY -0.01'
+    );
+    expect(shown.queryUpdates[0].result.report.counts).toEqual(
+      query.report.counts
+    );
+    expect(shown.queryUpdates[1]).toEqual({ id: failed, result: null });
+    expect(JSON.stringify(input)).toBe(before);
+    const legacy = modelMoney({
+      role: 'tool',
+      content: JSON.stringify({ queryResult: query }),
+    });
+    expect(
+      JSON.parse(legacy.content as string).queryResult.report.totals.expense
+    ).toBe('CNY 100.00');
+  });
+
+  it('preserves exact large three-decimal totals and leaves user messages and unrelated tool output intact', () => {
+    const shown = modelMoney({
+      role: 'tool',
+      content: JSON.stringify({
+        baseCurrency: 'KWD',
+        totalBaseMinor: Number.MAX_SAFE_INTEGER,
+      }),
+    });
+    expect(JSON.parse(shown.content as string).totalBaseAmount).toBe(
+      'KWD 9007199254740.991'
+    );
+    for (const input of [
+      { role: 'user', content: JSON.stringify(result()) },
+      { role: 'tool', content: '{broken' },
+      { role: 'tool', content: JSON.stringify({ count: 3500 }) },
+    ] as ModelMessage[])
+      expect(modelMoney(input)).toBe(input);
+  });
+});
 
 describe('WeChat formatted statistics', () => {
   it('reads old persisted query results and multi-report refreshes without losing failed report identifiers', () => {

@@ -111,7 +111,7 @@ try {
                     {
                       kind: 'draft',
                       status: result.status,
-                      total: result.totalBaseMinor,
+                      total: result.totalBaseAmount,
                     },
                   ];
               } catch {
