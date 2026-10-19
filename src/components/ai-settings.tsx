@@ -160,9 +160,10 @@ export function AiSettings({
               autoComplete="off"
             />
           </label>
-          <label className="block font-bold">
-            {t('ai_api')}
+          <div className="font-bold">
+            <label htmlFor="ai-protocol">{t('ai_api')}</label>
             <select
+              id="ai-protocol"
               value={api}
               onChange={(event) => {
                 setApi(event.target.value as Settings['api']);
@@ -173,7 +174,7 @@ export function AiSettings({
               <option value="chat-completions">Chat Completions</option>
               <option value="responses">Responses</option>
             </select>
-          </label>
+          </div>
           <label className="block font-bold">
             {t('ai_model')}
             <input
