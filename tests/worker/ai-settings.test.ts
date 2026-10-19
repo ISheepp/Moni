@@ -2,10 +2,12 @@ import { env } from 'cloudflare:workers';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { aiConfiguration } from '../../src/lib/ai-settings';
+import { conversationIntent } from '../../src/lib/conversation-intent';
 import { handlePrivateApi } from '../../src/worker';
 
 let signingKey: CryptoKey;
 let providerStatus = 200;
+let queryResponses = false;
 const calls: { url: string; authorization: string | null; body: string }[] = [];
 const noAi = { ...env, AI_API_KEY: '', AI_BASE_URL: '', AI_MODEL: '' };
 const syntheticKey = 'synthetic-web-key-not-a-real-secret';
@@ -27,15 +29,74 @@ beforeAll(async () => {
         return Response.json({
           keys: [{ ...jwk, kid: 'ai-settings-key', alg: 'RS256' }],
         });
+      const text = await request.text();
       calls.push({
         url: request.url,
         authorization: request.headers.get('Authorization'),
-        body: await request.text(),
+        body: text,
       });
       if (providerStatus !== 200)
         return new Response(`Provider echoed ${syntheticKey}`, {
           status: providerStatus,
         });
+      if (request.url.endsWith('/responses')) {
+        const body = JSON.parse(text);
+        const current = body.input.slice(
+          body.input.findLastIndex(
+            (item: { role?: string }) => item.role === 'user'
+          ) + 1
+        );
+        const output = body.tools?.some(
+          (tool: { name: string }) =>
+            tool.name === 'classify_draft_confirmation'
+        )
+          ? [
+              {
+                type: 'function_call',
+                id: 'fc_synthetic',
+                call_id: 'call_synthetic',
+                name: 'classify_draft_confirmation',
+                arguments: '{"intent":"other"}',
+                status: 'completed',
+              },
+            ]
+          : queryResponses &&
+              !current.some(
+                (item: { type: string }) => item.type === 'function_call_output'
+              )
+            ? [
+                {
+                  type: 'function_call',
+                  id: 'fc_query_synthetic',
+                  call_id: 'call_query_synthetic',
+                  name: 'query_ledger',
+                  arguments: JSON.stringify({
+                    inheritPrevious: false,
+                    period: { kind: 'all_time' },
+                    scope: 'spending',
+                    filters: {},
+                    view: 'entries',
+                    interval: 'day',
+                  }),
+                  status: 'completed',
+                },
+              ]
+            : [
+                {
+                  type: 'message',
+                  id: 'msg_synthetic',
+                  role: 'assistant',
+                  status: 'completed',
+                  content: [
+                    { type: 'output_text', text: 'OK', annotations: [] },
+                  ],
+                },
+              ];
+        return new Response(
+          `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_synthetic', status: 'completed', model: 'web-model', output } })}\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } }
+        );
+      }
       return new Response(
         `data: ${JSON.stringify({ id: 'config-probe', object: 'chat.completion.chunk', created: 1, model: 'web-model', choices: [{ index: 0, delta: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
         { headers: { 'Content-Type': 'text/event-stream' } }
@@ -135,6 +196,7 @@ describe('owner-managed AI configuration', () => {
       apiKey: syntheticKey,
       baseURL: values.baseURL,
       model: values.model,
+      api: 'chat-completions',
     });
     const backup = await api('exports/backup?datasetId=initial');
     expect(backup.status).toBe(200);
@@ -268,5 +330,145 @@ describe('owner-managed AI configuration', () => {
     expect(
       (await api('ai', { ...values, version: 3, baseURL }, 'PUT')).status
     ).toBe(400);
+  });
+  it('uses an encrypted Responses selection for the probe, shared classifier and persisted chat', async () => {
+    const version = (await (await api()).json<{ version: number }>()).version;
+    expect(
+      (await api('ai', { ...values, version, api: 'responses' }, 'PUT')).status
+    ).toBe(200);
+    expect(await (await api()).json()).toMatchObject({
+      api: 'responses',
+      version: version + 1,
+    });
+    const before = calls.length;
+    const response = await api(
+      'ai/test',
+      { ...values, version: version + 1, apiKey: '', api: 'responses' },
+      'POST'
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ connected: true });
+    expect(
+      (
+        await api(
+          'ai/test',
+          { ...values, version: version + 1, apiKey: '' },
+          'POST'
+        )
+      ).status
+    ).toBe(200);
+    expect(
+      await conversationIntent(noAi, '今天花了多少钱？', {
+        reviewed: false,
+        otherPendingDrafts: 0,
+        items: [],
+      })
+    ).toBe('other');
+    const threadId = crypto.randomUUID();
+    const chat = await api(
+      'probe',
+      {
+        datasetId: 'initial',
+        threadId,
+        runId: crypto.randomUUID(),
+        text: 'Synthetic Responses check',
+      },
+      'POST'
+    );
+    expect(chat.status).toBe(200);
+    expect(await chat.text()).toContain('OK');
+    const history = await api(`probe?threadId=${threadId}`);
+    expect(await history.text()).toContain('OK');
+    expect(
+      calls
+        .slice(before)
+        .every((call) => call.url === `${values.baseURL}/responses`)
+    ).toBe(true);
+    expect(
+      calls
+        .slice(before)
+        .every((call) => call.authorization === `Bearer ${syntheticKey}`)
+    ).toBe(true);
+    const payload = JSON.parse(calls[before].body);
+    expect(payload.input).toBeDefined();
+    expect(payload.messages).toBeUndefined();
+    expect(await aiConfiguration(noAi)).toMatchObject({
+      api: 'responses',
+      apiKey: syntheticKey,
+    });
+    const command = () => ({
+      datasetId: 'initial',
+      operationId: crypto.randomUUID(),
+    });
+    expect(
+      (
+        await api(
+          'initialize',
+          { ...command(), primaryCurrency: 'CNY', timeZone: 'Asia/Shanghai' },
+          'POST'
+        )
+      ).status
+    ).toBe(200);
+    const formalId = crypto.randomUUID();
+    expect(
+      (await api('conversations', { ...command(), id: formalId }, 'POST'))
+        .status
+    ).toBe(200);
+    expect(
+      (
+        await api(
+          'entries',
+          {
+            ...command(),
+            id: crypto.randomUUID(),
+            kind: 'expense',
+            name: 'Synthetic Responses lunch',
+            amount: '35',
+            currency: 'CNY',
+            date: '2026-10-19',
+            categoryId: 'expense-food',
+            tags: [],
+            note: 'Synthetic note',
+          },
+          'POST'
+        )
+      ).status
+    ).toBe(200);
+    queryResponses = true;
+    try {
+      const formal = await api(
+        'chat',
+        {
+          datasetId: 'initial',
+          threadId: formalId,
+          version: 1,
+          runId: crypto.randomUUID(),
+          text: '合成测试：查看全部账目明细',
+        },
+        'POST'
+      );
+      expect(formal.status).toBe(200);
+      const stream = await formal.text();
+      expect(stream).toContain('query_ledger');
+      expect(stream).toContain('Synthetic Responses lunch');
+      expect(stream).toContain('Synthetic note');
+      expect(stream).toContain('RUN_FINISHED');
+      expect(stream).not.toContain('暂时未完成');
+      expect(
+        calls
+          .slice(before)
+          .every((call) => call.url === `${values.baseURL}/responses`)
+      ).toBe(true);
+      expect(calls.at(-1)?.body).toContain('CNY 35.00');
+      expect(
+        (
+          await (
+            await api('entries/query', {}, 'POST')
+          ).json<{ total: number }>()
+        ).total
+      ).toBe(1);
+    } finally {
+      queryResponses = false;
+    }
   });
 });

@@ -16,6 +16,7 @@ export function AiSettings({
   const [settings, setSettings] = useState<Settings | null>(null);
   const [baseURL, setBaseURL] = useState('');
   const [model, setModel] = useState('');
+  const [api, setApi] = useState<Settings['api']>('chat-completions');
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<'saved' | 'tested' | 'cleared' | null>(
@@ -29,6 +30,7 @@ export function AiSettings({
     setSettings(value);
     setBaseURL(value.baseURL);
     setModel(value.model);
+    setApi(value.api);
     setApiKey('');
   }, []);
   useEffect(() => {
@@ -57,6 +59,7 @@ export function AiSettings({
         await privateApi('ai/test', {
           baseURL,
           model,
+          api,
           apiKey,
           version: settings.version,
         });
@@ -67,7 +70,7 @@ export function AiSettings({
             'ai',
             action === 'clear'
               ? { version: settings.version, confirmed: true }
-              : { baseURL, model, apiKey, version: settings.version },
+              : { baseURL, model, api, apiKey, version: settings.version },
             action === 'clear' ? 'DELETE' : 'PUT'
           )
         );
@@ -156,6 +159,20 @@ export function AiSettings({
               spellCheck={false}
               autoComplete="off"
             />
+          </label>
+          <label className="block font-bold">
+            {t('ai_api')}
+            <select
+              value={api}
+              onChange={(event) => {
+                setApi(event.target.value as Settings['api']);
+                dirty();
+              }}
+              className="moni-field mt-2 w-full"
+            >
+              <option value="chat-completions">Chat Completions</option>
+              <option value="responses">Responses</option>
+            </select>
           </label>
           <label className="block font-bold">
             {t('ai_model')}

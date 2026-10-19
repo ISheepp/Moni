@@ -64,6 +64,7 @@ async function summarizeHistory(
     ],
     apiKey: config.apiKey,
     baseURL: config.baseURL,
+    api: config.api,
     maxRetries: 0,
     timeout: 15000,
   });

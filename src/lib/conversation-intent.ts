@@ -104,6 +104,7 @@ async function classifyIntent(
     ],
     apiKey: config.apiKey,
     baseURL: config.baseURL,
+    api: config.api,
     maxRetries: 0,
     timeout: timeoutMs,
   });

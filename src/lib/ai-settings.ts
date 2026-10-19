@@ -10,6 +10,7 @@ const configInput = versionInput
     apiKey: z.string().trim().max(8192),
     baseURL: z.string().trim().min(1).max(2048),
     model: z.string().trim().min(1).max(200),
+    api: z.enum(['chat-completions', 'responses']).optional(),
   })
   .strict();
 type Stored = { encrypted_value: string | null; version: number };
@@ -19,6 +20,7 @@ export type AiSettings = {
   unreadable: boolean;
   baseURL: string;
   model: string;
+  api: AiConfiguration['api'];
   version: number;
 };
 const row = (env: Env) =>
@@ -62,11 +64,12 @@ async function decode(
       .safeParse(JSON.parse(new TextDecoder().decode(plain)));
     if (!result.success) return null;
     const parsed = result.data;
-    return environmentAiConfiguration({
+    const config = environmentAiConfiguration({
       AI_API_KEY: parsed.apiKey,
       AI_BASE_URL: parsed.baseURL,
       AI_MODEL: parsed.model,
     });
+    return config ? { ...config, api: parsed.api ?? 'chat-completions' } : null;
   } catch {
     return null;
   }
@@ -91,6 +94,7 @@ export async function readAiSettings(env: Env): Promise<AiSettings> {
     unreadable: Boolean(stored?.encrypted_value && !config),
     baseURL: config?.baseURL ?? '',
     model: config?.model ?? '',
+    api: config?.api ?? 'chat-completions',
     version: stored?.version ?? 0,
   };
 }
@@ -100,7 +104,7 @@ async function candidate(env: Env, raw: unknown) {
   const stored = await row(env);
   if ((stored?.version ?? 0) !== input.data.version)
     throw new HttpError(409, 'configuration_changed');
-  const previous = input.data.apiKey ? null : await configuration(env, stored);
+  const previous = await configuration(env, stored);
   const config = environmentAiConfiguration({
     AI_API_KEY: input.data.apiKey || previous?.apiKey || '',
     AI_BASE_URL: input.data.baseURL,
@@ -109,11 +113,18 @@ async function candidate(env: Env, raw: unknown) {
   if (!config || /\s/u.test(config.apiKey))
     throw new HttpError(400, 'invalid_ai_configuration');
   if (
+    !input.data.apiKey &&
     previous &&
     new URL(config.baseURL).origin !== new URL(previous.baseURL).origin
   )
     throw new HttpError(400, 'ai_key_required_for_new_host');
-  return { config, version: input.data.version };
+  return {
+    config: {
+      ...config,
+      api: input.data.api ?? previous?.api ?? 'chat-completions',
+    },
+    version: input.data.version,
+  };
 }
 async function write(env: Env, version: number, encrypted: string | null) {
   const result = await (version === 0
@@ -153,42 +164,71 @@ export async function clearAiSettings(env: Env, raw: unknown) {
 }
 export async function testAiSettings(env: Env, raw: unknown) {
   const { config } = await candidate(env, raw);
+  for (const timeoutMs of [15000, 30000]) {
+    const result = await connectionAttempt(config, timeoutMs);
+    if (result === 'connected') return { connected: true };
+    if (result === 'failed') break;
+  }
+  throw new HttpError(502, 'ai_connection_failed');
+}
+
+async function connectionAttempt(config: AiConfiguration, timeoutMs: number) {
+  type Result = 'connected' | 'retry' | 'failed';
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  try {
-    const provider = openaiCompatible({
-      models: [
-        createModel(config.model, {
-          input: ['text'],
-          features: ['streaming'],
-          tools: [],
-        }),
-      ],
-      apiKey: config.apiKey,
-      baseURL: config.baseURL,
-      maxRetries: 0,
-      timeout: 15000,
-    });
-    let text = '';
-    let finished = false;
-    for await (const chunk of chat({
-      adapter: provider(config.model),
-      messages: [{ role: 'user', content: 'Reply only OK.' }],
-      agentLoopStrategy: maxIterations(1),
-      abortController: controller,
-      debug: false,
-    })) {
-      if (chunk.type === 'RUN_ERROR') throw new Error('Provider failed');
-      if (chunk.type === 'TEXT_MESSAGE_CONTENT') text += chunk.delta;
-      if (chunk.type === 'RUN_FINISHED') finished = true;
-      if (text.length > 256) throw new Error('Unexpected probe output');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stopped = new Promise<Result>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve('retry');
+    }, timeoutMs);
+  });
+  const consume = async (): Promise<Result> => {
+    try {
+      const provider = openaiCompatible({
+        models: [
+          createModel(config.model, {
+            input: ['text'],
+            features: ['streaming'],
+            tools: [],
+          }),
+        ],
+        apiKey: config.apiKey,
+        baseURL: config.baseURL,
+        api: config.api,
+        maxRetries: 0,
+        timeout: timeoutMs,
+      });
+      let text = '';
+      let finished = false;
+      for await (const chunk of chat({
+        adapter: provider(config.model),
+        messages: [{ role: 'user', content: 'Reply only OK.' }],
+        agentLoopStrategy: maxIterations(1),
+        abortController: controller,
+        debug: false,
+      })) {
+        if (chunk.type === 'RUN_ERROR')
+          return [400, 401, 403, 404, 422].includes(
+            Number(chunk.code ?? chunk.error?.code)
+          )
+            ? 'failed'
+            : 'retry';
+        if (chunk.type === 'TEXT_MESSAGE_CONTENT') text += chunk.delta;
+        if (chunk.type === 'RUN_FINISHED') finished = true;
+        if (text.length > 256) return 'failed';
+      }
+      return controller.signal.aborted
+        ? 'retry'
+        : finished && text.trim()
+          ? 'connected'
+          : 'failed';
+    } catch {
+      // Provider errors can contain request credentials; never log or return them.
+      return 'retry';
     }
-    if (!finished || !text.trim() || controller.signal.aborted)
-      throw new Error('Incomplete probe');
-    return { connected: true };
-  } catch {
-    // Provider errors can contain request credentials; never log or return them.
-    throw new HttpError(502, 'ai_connection_failed');
+  };
+  try {
+    return await Promise.race([stopped, consume()]);
   } finally {
     clearTimeout(timer);
     controller.abort();

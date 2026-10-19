@@ -421,6 +421,7 @@ export class Conversation extends DurableObject<Env> {
         ],
         apiKey: config.apiKey,
         baseURL: config.baseURL,
+        api: config.api,
         maxRetries: 0,
         timeout: limits.runMilliseconds,
       });

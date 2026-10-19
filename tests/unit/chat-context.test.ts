@@ -7,6 +7,7 @@ import {
 } from '@tanstack/ai';
 import { openaiCompatible } from '@tanstack/ai-openai/compatible';
 import { afterEach, expect, it, vi } from 'vitest';
+import { aiConfiguration } from '../../src/lib/ai-settings';
 import { conversationContext } from '../../src/lib/chat-context';
 
 vi.mock('../../src/lib/ai-settings', async () => {
@@ -14,7 +15,7 @@ vi.mock('../../src/lib/ai-settings', async () => {
     '../../src/lib/ai-config'
   );
   return {
-    aiConfiguration: async (env: Env) => environmentAiConfiguration(env),
+    aiConfiguration: vi.fn(async (env: Env) => environmentAiConfiguration(env)),
   };
 });
 
@@ -26,6 +27,7 @@ const env = {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  vi.mocked(aiConfiguration).mockClear();
 });
 async function run(
   messages: ModelMessage[],
@@ -109,6 +111,41 @@ it('rejects an oversized current turn before any model or summary request', asyn
     run([{ role: 'user', content: 'x'.repeat(40000) }])
   ).rejects.toThrow('context_limit');
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it('uses the saved Responses protocol for automatic summaries and preserves full history', async () => {
+  const config = await aiConfiguration(env);
+  if (!config) throw new Error('Synthetic configuration missing');
+  vi.mocked(aiConfiguration).mockResolvedValueOnce({
+    ...config,
+    api: 'responses',
+  });
+  const paths: string[] = [];
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    paths.push(String(url));
+    if (String(url).endsWith('/responses')) {
+      expect(JSON.parse(String(init?.body)).input).toBeDefined();
+      return new Response(
+        `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_summary', status: 'completed', output: [{ type: 'message', id: 'msg_summary', role: 'assistant', content: [{ type: 'output_text', text: 'Synthetic Responses memory.', annotations: [] }] }] } })}\n\n`,
+        { headers: { 'Content-Type': 'text/event-stream' } }
+      );
+    }
+    expect(String(init?.body)).toContain('Synthetic Responses memory.');
+    return new Response(
+      `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'Synthetic answer' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+      { headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  });
+  const history: ModelMessage[] = [
+    ...Array.from({ length: 100 }, () => ({
+      role: 'user' as const,
+      content: 'Synthetic history '.repeat(100),
+    })),
+    { role: 'user', content: 'Current synthetic input' },
+  ];
+  expect(await run(history)).toBe('Synthetic answer');
+  expect(paths).toContain('https://model.invalid/v1/responses');
+  expect(history).toHaveLength(101);
 });
 
 it('does not repeat a failed summary during the same run and allows a fresh run to try again', async () => {

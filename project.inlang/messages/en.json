@@ -532,6 +532,7 @@
   "ai_unreadable": "The saved credentials cannot be read. Enter the key again or clear the configuration; check whether the deployment encryption key changed.",
   "ai_base_url": "Base URL",
   "ai_model": "Model",
+  "ai_api": "API protocol",
   "ai_api_key": "API Key",
   "ai_keep_key": "Leave blank to keep the saved key",
   "ai_key_hint": "The key is encrypted on the server and never returned after saving or included in business backups. Leave it blank to keep the saved key; changing the service hostname requires entering a key again.",

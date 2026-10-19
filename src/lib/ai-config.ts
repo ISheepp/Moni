@@ -2,6 +2,7 @@ export type AiConfiguration = {
   apiKey: string;
   baseURL: string;
   model: string;
+  api: 'chat-completions' | 'responses';
 };
 
 export function environmentAiConfiguration(
@@ -29,6 +30,7 @@ export function environmentAiConfiguration(
       apiKey: env.AI_API_KEY,
       baseURL: url.toString(),
       model: env.AI_MODEL,
+      api: 'chat-completions',
     };
   } catch {
     return null;

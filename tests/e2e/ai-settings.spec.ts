@@ -17,12 +17,53 @@ test('owner configures AI after deploy, tests, updates without reentering the ke
     ai: {},
     wechatSecret: '0123456789abcdef'.repeat(4),
     provider: async (req) => {
-      if (req.url !== 'https://web-model.invalid/v1/chat/completions')
+      if (
+        ![
+          'https://web-model.invalid/v1/chat/completions',
+          'https://web-model.invalid/v1/responses',
+        ].includes(req.url)
+      )
         throw new Error('Unexpected outbound request');
       expect(req.headers.get('Authorization')).toBe(
         'Bearer synthetic-browser-ai-key'
       );
       modelCalls++;
+      if (req.url.endsWith('/responses')) {
+        const body = JSON.parse(await req.text());
+        const output = body.tools?.some(
+          (tool: { name: string }) =>
+            tool.name === 'classify_draft_confirmation'
+        )
+          ? [
+              {
+                type: 'function_call',
+                id: 'fc_synthetic',
+                call_id: 'call_synthetic',
+                name: 'classify_draft_confirmation',
+                arguments: '{"intent":"other"}',
+                status: 'completed',
+              },
+            ]
+          : [
+              {
+                type: 'message',
+                id: 'msg_synthetic',
+                role: 'assistant',
+                status: 'completed',
+                content: [
+                  {
+                    type: 'output_text',
+                    text: 'Synthetic AI connection ready.',
+                    annotations: [],
+                  },
+                ],
+              },
+            ];
+        return new WorkerResponse(
+          `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_synthetic', status: 'completed', model: 'synthetic-model', output } })}\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } }
+        );
+      }
       const intent = await syntheticOtherIntent(req);
       if (intent) return intent;
       return new WorkerResponse(
@@ -61,6 +102,14 @@ test('owner configures AI after deploy, tests, updates without reentering the ke
   ).toBe(false);
   expect(modelCalls).toBe(1);
   await card
+    .getByLabel('API protocol', { exact: true })
+    .selectOption('responses');
+  await card
+    .getByRole('button', { name: 'Test connection', exact: true })
+    .click();
+  await expect(card.getByText(/Connection test passed/)).toBeVisible();
+  expect(modelCalls).toBe(2);
+  await card
     .getByRole('button', { name: 'Save AI configuration', exact: true })
     .click();
   await expect(card.getByText(/AI configuration saved/)).toBeVisible();
@@ -70,6 +119,9 @@ test('owner configures AI after deploy, tests, updates without reentering the ke
   await page.reload();
   await expect(card.getByLabel('Model', { exact: true })).toHaveValue(
     'synthetic-model'
+  );
+  await expect(card.getByLabel('API protocol', { exact: true })).toHaveValue(
+    'responses'
   );
   await card.screenshot({
     path: `docs/verification/screenshots/ai-settings-${isMobile ? 'mobile' : 'pc'}.png`,
