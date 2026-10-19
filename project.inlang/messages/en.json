@@ -290,7 +290,7 @@
   "report_monthly": "Monthly",
   "report_chart_alternative": "Expense and refund bars. Exact amounts, counts and detail links are in the data table below.",
   "report_data_table": "View trend data and entries",
-  "report_distribution": "Expense distribution · refunds listed separately",
+  "report_distribution": "Expense distribution",
   "report_group_by": "Group by",
   "report_tags_overlap": "An entry can appear in multiple tag groups. Do not add groups to get a total; each entry is counted once in the totals above.",
   "report_no_expenses": "No expenses or refunds in this period.",
@@ -552,5 +552,10 @@
   "nl_query_page": "Page",
   "nl_query_note_excerpt": "Note excerpt",
   "nl_query_entries_partial": "Only part of this page is shown. Open Moni on the web for complete details.",
-  "nl_query_next_hint": "Ask “next page” to see more entries."
+  "nl_query_next_hint": "Ask “next page” to see more entries.",
+  "report_overview": "Your income, spending and trends, at a glance.",
+  "report_loading": "Loading reports…",
+  "report_year": "Year",
+  "report_previous_year": "Previous year",
+  "report_next_year": "Next year"
 }

@@ -155,8 +155,9 @@ test('manual foreign entry previews exact conversion, preserves metadata edits a
       .getByRole('button', { name: 'More filters', exact: true })
       .click();
   await page
-    .getByLabel('Original currency', { exact: true })
-    .selectOption('USD');
+    .getByRole('combobox', { name: 'Original currency', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'USD', exact: true }).click();
 
   await page
     .getByRole('button', { name: 'Apply filters', exact: true })

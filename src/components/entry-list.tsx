@@ -1,12 +1,18 @@
+import { Checkbox } from '@base-ui/react/checkbox';
+import { Input } from '@base-ui/react/input';
+import { Popover } from '@base-ui/react/popover';
 import {
+  IconCheck,
+  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconFilter,
   IconSearch,
 } from '@tabler/icons-react';
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 import { currencies } from '@/ledger/currencies';
 import type { Entry } from '@/ledger/entries';
 import {
@@ -323,6 +329,7 @@ export function EntryFilterForm({
   onApply: (value: EntryFilters) => void;
 }) {
   const [draft, setDraft] = useState(filters);
+  const filterId = useId();
   const [expanded, setExpanded] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const t = (key: Parameters<typeof message>[0]) => message(key, locale);
@@ -372,12 +379,16 @@ export function EntryFilterForm({
       }}
     >
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[2fr_1fr_1fr]">
-        <label className="col-span-2 block min-w-0 font-bold lg:col-span-1">
+        <label
+          htmlFor={`${filterId}-keyword`}
+          className="col-span-2 block min-w-0 font-bold lg:col-span-1"
+        >
           <span className="mb-2 flex items-center gap-2">
             <IconSearch size={20} aria-hidden />
             {t('query_keyword')}
           </span>
-          <input
+          <Input
+            id={`${filterId}-keyword`}
             type="search"
             value={draft.keyword ?? ''}
             onChange={(event) =>
@@ -386,9 +397,10 @@ export function EntryFilterForm({
             className="moni-field"
           />
         </label>
-        <label className="block min-w-0 font-bold">
+        <label htmlFor={`${filterId}-from`} className="block min-w-0 font-bold">
           {t('query_from')}
-          <input
+          <Input
+            id={`${filterId}-from`}
             type="date"
             value={draft.from ?? ''}
             onChange={(event) =>
@@ -397,9 +409,10 @@ export function EntryFilterForm({
             className="moni-field mt-2"
           />
         </label>
-        <label className="block min-w-0 font-bold">
+        <label htmlFor={`${filterId}-to`} className="block min-w-0 font-bold">
           {t('query_to')}
-          <input
+          <Input
+            id={`${filterId}-to`}
             type="date"
             value={draft.to ?? ''}
             onChange={(event) =>
@@ -424,119 +437,120 @@ export function EntryFilterForm({
         id="entry-more-filters"
         className={`${expanded ? 'grid' : 'hidden md:grid'} mt-3 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4`}
       >
-        <label className="min-w-0 font-bold">
-          {t('query_type')}
-          <select
-            className="moni-field mt-2"
-            aria-label={t('query_type')}
+        <div className="min-w-0 font-bold">
+          <p className="mb-2 text-sm">{t('query_type')}</p>
+          <Select
+            label={t('query_type')}
             value={draft.kind ?? ''}
-            onChange={(event) =>
+            onValueChange={(value) =>
               setDraft({
                 ...draft,
-                kind: (event.target.value as EntryFilters['kind']) || undefined,
+                kind: value || undefined,
                 categoryId: undefined,
               })
             }
-          >
-            <option value="">{t('query_all')}</option>
-            <option value="spending">{t('query_spending')}</option>
-            <option value="expense">{t('entry_expense')}</option>
-            <option value="income">{t('entry_income')}</option>
-            <option value="refund">{t('query_refund')}</option>
-          </select>
-        </label>
-        <label className="min-w-0 font-bold">
-          {t('entry_category')}
-          <select
-            className="moni-field mt-2"
-            aria-label={t('entry_category')}
+            items={[
+              { value: '', label: t('query_all') },
+              { value: 'spending', label: t('query_spending') },
+              { value: 'expense', label: t('entry_expense') },
+              { value: 'income', label: t('entry_income') },
+              { value: 'refund', label: t('query_refund') },
+            ]}
+          />
+        </div>
+        <div className="min-w-0 font-bold">
+          <p className="mb-2 text-sm">{t('entry_category')}</p>
+          <Select
+            label={t('entry_category')}
             value={draft.categoryId ?? ''}
-            onChange={(event) =>
+            onValueChange={(value) =>
               setDraft({
                 ...draft,
-                categoryId: event.target.value || undefined,
+                categoryId: value || undefined,
               })
             }
-          >
-            <option value="">{t('query_all')}</option>
-            {(['expense', 'income'] as const)
-              .filter(
-                (kind) =>
-                  !draft.kind ||
-                  kind === (draft.kind === 'income' ? 'income' : 'expense')
-              )
-              .map((kind) => (
-                <optgroup
-                  key={kind}
-                  label={t(
-                    kind === 'income' ? 'entry_income' : 'entry_expense'
-                  )}
-                >
-                  {taxonomy.categories
-                    .filter((item) => item.kind === kind)
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {categoryLabel(item.name, item.defaultKey, locale)}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-          </select>
-        </label>
-        <label className="min-w-0 font-bold">
-          {t('query_currency')}
-          <select
-            className="moni-field mt-2"
-            aria-label={t('query_currency')}
+            items={[
+              { value: '', label: t('query_all') },
+              ...taxonomy.categories
+                .filter(
+                  (item) =>
+                    !draft.kind ||
+                    item.kind ===
+                      (draft.kind === 'income' ? 'income' : 'expense')
+                )
+                .map((item) => ({
+                  value: item.id,
+                  label: `${!draft.kind ? `${t(item.kind === 'income' ? 'entry_income' : 'entry_expense')} · ` : ''}${categoryLabel(item.name, item.defaultKey, locale)}`,
+                })),
+            ]}
+          />
+        </div>
+        <div className="min-w-0 font-bold">
+          <p className="mb-2 text-sm">{t('query_currency')}</p>
+          <Select
+            label={t('query_currency')}
             value={draft.currency ?? ''}
-            onChange={(event) =>
+            onValueChange={(value) =>
               setDraft({
                 ...draft,
-                currency:
-                  (event.target.value as EntryFilters['currency']) || undefined,
+                currency: value || undefined,
               })
             }
-          >
-            <option value="">{t('query_all')}</option>
-            {currencies.map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-        </label>
-        <details className="min-w-0 self-end">
-          <summary className="moni-field cursor-pointer font-bold">
+            items={[
+              { value: '', label: t('query_all') },
+              ...currencies.map((code) => ({ value: code, label: code })),
+            ]}
+          />
+        </div>
+        <Popover.Root>
+          <Popover.Trigger className="flex min-h-11 min-w-0 items-center justify-between gap-2 self-end rounded-xl border border-foreground/20 bg-surface px-3 py-2 text-left text-sm font-bold outline-none hover:border-foreground/50 focus-visible:ring-4 focus-visible:ring-focus">
             {t('query_tags_any')} ({draft.tagIds?.length ?? 0})
-          </summary>
-          <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-muted bg-surface p-3">
-            {taxonomy.tags.length ? (
-              taxonomy.tags.map((tag) => (
-                <label
-                  key={tag.id}
-                  className="flex min-h-11 cursor-pointer items-center gap-3"
-                >
-                  <input
-                    type="checkbox"
-                    className="size-5 shrink-0 accent-orange"
-                    checked={draft.tagIds?.includes(tag.id) ?? false}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        tagIds: event.target.checked
-                          ? [...(draft.tagIds ?? []), tag.id]
-                          : draft.tagIds?.filter((id) => id !== tag.id),
-                      })
-                    }
-                  />
-                  <span className="break-words">{tag.name}</span>
-                </label>
-              ))
-            ) : (
-              <p className="text-sm">{t('query_no_tags')}</p>
-            )}
-          </div>
-        </details>
+            <IconChevronDown size={18} className="shrink-0" aria-hidden />
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Positioner
+              sideOffset={6}
+              align="start"
+              className="z-[100] outline-none"
+            >
+              <Popover.Popup className="max-h-[min(20rem,var(--available-height))] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-foreground/20 bg-surface p-3 text-foreground shadow-lg outline-none">
+                <Popover.Title className="mb-2 text-sm font-bold">
+                  {t('query_tags_any')}
+                </Popover.Title>
+                {taxonomy.tags.length ? (
+                  taxonomy.tags.map((tag) => (
+                    <label
+                      key={tag.id}
+                      htmlFor={`${filterId}-${tag.id}`}
+                      className="flex min-h-11 cursor-pointer items-center gap-3"
+                    >
+                      <Checkbox.Root
+                        id={`${filterId}-${tag.id}`}
+                        className="flex size-5 shrink-0 items-center justify-center rounded border border-muted-foreground outline-none focus-visible:ring-4 focus-visible:ring-focus data-[checked]:border-orange data-[checked]:bg-orange data-[checked]:text-ink"
+                        checked={draft.tagIds?.includes(tag.id) ?? false}
+                        onCheckedChange={(checked) =>
+                          setDraft({
+                            ...draft,
+                            tagIds: checked
+                              ? [...(draft.tagIds ?? []), tag.id]
+                              : draft.tagIds?.filter((id) => id !== tag.id),
+                          })
+                        }
+                      >
+                        <Checkbox.Indicator>
+                          <IconCheck size={16} stroke={3} aria-hidden />
+                        </Checkbox.Indicator>
+                      </Checkbox.Root>
+                      <span className="break-words">{tag.name}</span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-sm">{t('query_no_tags')}</p>
+                )}
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
       </div>
       {summary.length > 0 && (
         <p className="mt-3 break-words text-sm text-muted-foreground">

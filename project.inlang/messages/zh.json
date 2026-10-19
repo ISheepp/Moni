@@ -290,7 +290,7 @@
   "report_monthly": "每月",
   "report_chart_alternative": "支出与退款柱状图，精确金额、笔数和明细链接见下方数据表。",
   "report_data_table": "查看趋势数据与明细",
-  "report_distribution": "支出分布（退款另列）",
+  "report_distribution": "支出分布",
   "report_group_by": "分组方式",
   "report_tags_overlap": "一笔账可出现在多个标签分组中。分组金额不能相加作为总额；上方总额每笔只计一次。",
   "report_no_expenses": "这段时间没有支出或退款。",
@@ -552,5 +552,10 @@
   "nl_query_page": "页码",
   "nl_query_note_excerpt": "备注节选",
   "nl_query_entries_partial": "此处仅显示本页部分明细，完整内容请到 Moni 网页查看。",
-  "nl_query_next_hint": "可以继续问“下一页”查看后续账目。"
+  "nl_query_next_hint": "可以继续问“下一页”查看后续账目。",
+  "report_overview": "收支、趋势和消费分布，一目了然。",
+  "report_loading": "正在整理统计…",
+  "report_year": "年份",
+  "report_previous_year": "上一年",
+  "report_next_year": "下一年"
 }

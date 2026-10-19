@@ -57,16 +57,21 @@ test('combined filters, paging, detail return and language changes retain the cu
     await page
       .getByRole('button', { name: 'More filters', exact: true })
       .click();
-  await page.getByLabel('Type', { exact: true }).selectOption('expense');
+  await page.getByRole('combobox', { name: 'Type', exact: true }).click();
+  await page.getByRole('option', { name: 'Expense', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Category', exact: true }).click();
+  await page.getByRole('option', { name: 'Food', exact: true }).click();
   await page
-    .getByLabel('Category', { exact: true })
-    .selectOption('expense-food');
-  await page
-    .getByLabel('Original currency', { exact: true })
-    .selectOption('CNY');
+    .getByRole('combobox', { name: 'Original currency', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'CNY', exact: true }).click();
   await page.getByText('Any selected tag (0)', { exact: true }).click();
   await page.getByRole('checkbox', { name: 'delivery', exact: true }).check();
   await page.getByRole('checkbox', { name: 'lunch', exact: true }).check();
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('button', { name: 'Any selected tag (2)', exact: true })
+  ).toBeFocused();
   await page
     .getByRole('button', { name: 'Apply filters', exact: true })
     .click();
