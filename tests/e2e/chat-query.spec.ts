@@ -35,7 +35,11 @@ test('dated query cards retain filters, separate currencies, survive reload, and
               },
             ],
           }
-        : { role: 'assistant', content: 'See the dated ledger result below.' };
+        : {
+            role: 'assistant',
+            content:
+              'See the dated ledger result below.\n\n## Query summary\n\n| Item | Amount |\n| --- | --- |\n| Lunch | **CNY 35.00** |\n\n- Read the **current** result.\n- [Unsafe link](javascript:alert(1))\n\n<script>window.moniMarkdownUnsafe=true</script>\n\n![Synthetic image](https://example.invalid/private-image.png)',
+          };
       return new WorkerResponse(
         `data: ${JSON.stringify({ id: 'synthetic-query', object: 'chat.completion.chunk', created: 1, model: 'synthetic-model', choices: [{ index: 0, delta, finish_reason: input ? 'tool_calls' : 'stop' }] })}\n\ndata: [DONE]\n\n`,
         { headers: { 'Content-Type': 'text/event-stream' } }
@@ -140,6 +144,20 @@ test('dated query cards retain filters, separate currencies, survive reload, and
       );
     })
   ).toBe(true);
+  const firstTurn = page.locator('li').filter({ has: first });
+  await expect(
+    firstTurn.getByRole('heading', { name: 'Query summary', exact: true })
+  ).toBeVisible();
+  await expect(firstTurn.getByRole('table')).toContainText('CNY 35.00');
+  await expect(
+    firstTurn.locator('strong').getByText('CNY 35.00')
+  ).toBeVisible();
+  await expect(
+    firstTurn.getByText('Unsafe link', { exact: true })
+  ).toBeVisible();
+  await expect(firstTurn.locator('a[href^="javascript:"]')).toHaveCount(0);
+  await expect(firstTurn.locator('script')).toHaveCount(0);
+  await expect(firstTurn.locator('img[src*="private-image"]')).toHaveCount(0);
   await expect(
     first.getByText('Any tag：Delivery', { exact: true })
   ).toBeVisible();
@@ -162,6 +180,9 @@ test('dated query cards retain filters, separate currencies, survive reload, and
   await expect(second.getByText('Any tag：Delivery')).toBeVisible();
   await page.reload();
   await expect(results).toHaveCount(2);
+  await expect(
+    page.getByRole('heading', { name: 'Query summary', exact: true })
+  ).toHaveCount(2);
   expect(calls).toBe(4);
   const third = await ask({ ...base, filters: { currency: 'USD' } }, 3);
   await expect(third.getByText('CN¥108.00', { exact: true })).toBeVisible();

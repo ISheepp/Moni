@@ -22,6 +22,7 @@ import { chatPersistence } from '../../src/lib/chat-persistence';
 let signingKey: CryptoKey;
 let datasetId: string;
 let modelCalls = 0;
+let intentStatus = 200;
 const replies: { tool?: Record<string, unknown>; text?: string }[] = [];
 const modelInputs: { messages: { role: string; content: string }[] }[] = [];
 beforeAll(async () => {
@@ -43,6 +44,21 @@ beforeAll(async () => {
         tools?: { function: { name: string } }[];
         messages: { role: string; content: string }[];
       };
+      if (
+        body.tools?.some(
+          (tool) => tool.function.name === 'classify_draft_confirmation'
+        )
+      ) {
+        if (intentStatus !== 200)
+          return Response.json(
+            { error: { message: 'Synthetic classification failure' } },
+            { status: intentStatus }
+          );
+        return new Response(
+          `data: ${JSON.stringify({ choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: crypto.randomUUID(), type: 'function', function: { name: 'classify_draft_confirmation', arguments: '{"intent":"other"}' } }] }, finish_reason: 'tool_calls' }] })}\n\ndata: [DONE]\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } }
+        );
+      }
       if (
         body.messages.some(
           (message) =>
@@ -118,6 +134,7 @@ async function api(path: string, body?: unknown, method = 'POST') {
 beforeEach(async () => {
   expect(replies).toHaveLength(0);
   modelCalls = 0;
+  intentStatus = 200;
   modelInputs.length = 0;
   datasetId = crypto.randomUUID();
   await env.DB.batch([
@@ -201,6 +218,60 @@ async function ask(
 }
 
 describe('restricted natural-language queries through protected D1/DO chat', () => {
+  it('shows fresh last-query details without any model writes when web intent recognition is unavailable', async () => {
+    await entry({ note: '合成降级午餐' });
+    const threadId = await createThread();
+    await ask(threadId, query({ filters: { keyword: '合成降级' } }));
+    await entry({ name: '合成降级晚餐', note: '合成降级晚餐' });
+    const policy = await (await api('posting-policy')).json<{
+      version: number;
+    }>();
+    expect(
+      (
+        await api('posting-policy', {
+          ...command(),
+          version: policy.version,
+          mode: 'automatic',
+          confirmed: true,
+        })
+      ).status
+    ).toBe(200);
+    intentStatus = 403;
+    const calls = modelCalls;
+    for (const text of [
+      '具体的账目给我看一下',
+      '确认，并新增午饭99元，改成美元',
+    ]) {
+      const metadata = await (await api(`conversations/${threadId}`)).json<{
+        version: number;
+      }>();
+      const response = await api('chat', {
+        datasetId,
+        threadId,
+        version: metadata.version,
+        runId: crypto.randomUUID(),
+        text,
+        locale: 'zh',
+        review: null,
+      });
+      const stream = await response.text();
+      expect(response.status).toBe(200);
+      expect(stream).toContain('上一次查询条件');
+      expect(stream).toContain('合成降级晚餐');
+      expect(stream).toContain('¥70.00');
+      expect(stream).toContain('没有新增、修改或入账');
+      expect(stream).not.toContain('没有待确认草稿');
+    }
+    expect(modelCalls).toBe(calls);
+    expect(await (await api('entries')).json()).toHaveLength(2);
+    expect(
+      (
+        await (
+          await api(`drafts?threadId=${threadId}`)
+        ).json<{ items: unknown[] }>()
+      ).items
+    ).toHaveLength(0);
+  });
   it('shows current posted entry details and notes using the previous query conditions, without drafting or posting', async () => {
     const saved = await entry({ name: '合成明细午餐', note: '肯德基合成明细' });
     await entry({

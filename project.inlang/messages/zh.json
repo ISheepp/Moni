@@ -301,6 +301,8 @@
   "chat_history": "会话记录",
   "chat_you": "你",
   "chat_assistant": "小票助手",
+  "chat_table": "回复中的表格",
+  "chat_query_fallback": "消息识别暂时未完成，本次文字中的新条件尚未应用，也没有新增、修改或入账。以下仅为上一次查询条件下的最新账目明细。",
   "chat_nontext": "这条回复包含非文字内容。",
   "chat_busy": "这个会话正在处理，请稍后刷新历史；不会排队发送新请求。",
   "chat_working": "正在整理，请稍候…",

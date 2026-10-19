@@ -16,6 +16,7 @@ import {
 } from '@tanstack/ai-react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { ChatMarkdown } from '@/components/chat-markdown';
 import { DraftCards } from '@/components/draft-cards';
 import { QueryResultCard, queryResults } from '@/components/query-result-card';
 import { Button } from '@/components/ui/button';
@@ -478,7 +479,7 @@ function ChatSession({
                         />
                       )}
                       <div
-                        className={`min-w-0 max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 md:max-w-[75%] md:px-5 md:py-4 ${item.role === 'user' ? 'bg-yellow/70 text-ink' : 'bg-surface'}`}
+                        className={`min-w-0 max-w-[85%] break-words rounded-2xl px-4 py-3 md:max-w-[75%] md:px-5 md:py-4 ${item.role === 'user' ? 'whitespace-pre-wrap bg-yellow/70 text-ink' : 'bg-surface'}`}
                       >
                         <span className="sr-only">
                           {t(
@@ -486,7 +487,11 @@ function ChatSession({
                           )}
                           ：
                         </span>
-                        {text}
+                        {item.role === 'user' ? (
+                          text
+                        ) : (
+                          <ChatMarkdown text={text} locale={locale} />
+                        )}
                       </div>
                     </div>
                   )}

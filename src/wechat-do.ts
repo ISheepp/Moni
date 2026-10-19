@@ -17,6 +17,7 @@ import {
 import { draftReviewSummary } from './ledger/draft-review-summary';
 import { type Draft, queryDrafts } from './ledger/drafts';
 import { displayMoney } from './ledger/money';
+import { lastQueryDetails } from './ledger/query-fallback';
 import { readSettings } from './ledger/settings';
 import { readTaxonomy } from './ledger/taxonomy';
 import { aiConfiguration } from './lib/ai-settings';
@@ -940,23 +941,33 @@ export class WechatBot extends DurableObject<Env> {
     );
     if (!delivery.confirmationIntent && !(await aiConfiguration(this.env)))
       return message('wechat_ai_setup_hint', delivery.locale);
+    const previous = await previousLedgerQuery(
+      this.env.DB,
+      state.datasetId,
+      state.threadId
+    );
     const decision =
       delivery.confirmationIntent ??
       (await conversationIntent(this.env, delivery.text, {
         ...reviewContext(reviewed, review, drafts),
-        previousQuery:
-          (
-            await previousLedgerQuery(
-              this.env.DB,
-              state.datasetId,
-              state.threadId
-            )
-          )?.query ?? null,
+        previousQuery: previous?.query ?? null,
       }));
     await this.current(state, delivery.threadId);
     const t = (key: Parameters<typeof message>[0]) =>
       message(key, delivery.locale);
     let reply = t('wechat_confirmation_unavailable');
+    if (!decision) {
+      const fallback = await lastQueryDetails(
+        this.env.DB,
+        state.datasetId,
+        previous,
+        delivery.locale
+      );
+      if (fallback) {
+        reply = fallback;
+        await this.ctx.storage.delete('confirmation');
+      }
+    }
     if (decision) {
       delivery.confirmationIntent = decision;
       await this.ctx.storage.put(key, await sealWechat(this.env, delivery));

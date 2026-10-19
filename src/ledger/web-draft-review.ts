@@ -18,6 +18,7 @@ import {
   type VisibleDraftReview,
 } from './draft-review';
 import { queryDrafts } from './drafts';
+import { lastQueryDetails } from './query-fallback';
 
 export async function webDraftReply(
   env: Env,
@@ -73,14 +74,17 @@ export async function webDraftReply(
       selected.length > 0 &&
       selected.reduce((count, draft) => count + draft.items.length, 0) <= 20
   );
+  const previous = await previousLedgerQuery(
+    env.DB,
+    datasetId,
+    permit.threadId
+  );
   const decision = await conversationIntent(
     env,
     text,
     {
       ...reviewContext(reviewed, review, drafts),
-      previousQuery:
-        (await previousLedgerQuery(env.DB, datasetId, permit.threadId))
-          ?.query ?? null,
+      previousQuery: previous?.query ?? null,
     },
     signal
   );
@@ -89,8 +93,13 @@ export async function webDraftReply(
   const plan = planDraftReview(decision, reviewed, review, drafts);
   if (plan.action === 'continue') return null;
   const t = (key: Parameters<typeof message>[0]) => message(key, locale);
+  const fallback =
+    decision === null
+      ? await lastQueryDetails(env.DB, datasetId, previous, locale)
+      : null;
   let reply: string;
-  if (plan.action === 'preview') {
+  if (fallback) reply = fallback;
+  else if (plan.action === 'preview') {
     const ready = plan.drafts.filter((draft) => draft.status === 'ready');
     const tooLarge =
       ready.length > 20 ||
@@ -126,9 +135,12 @@ export async function webDraftReply(
         content: reply,
         metadata: {
           moniDraftReview:
-            plan.action === 'preview' ||
-            (reviewed &&
-              !['continue', 'decline', 'posted_change'].includes(plan.action)),
+            !fallback &&
+            (plan.action === 'preview' ||
+              (reviewed &&
+                !['continue', 'decline', 'posted_change'].includes(
+                  plan.action
+                ))),
         },
       }),
       datasetId,

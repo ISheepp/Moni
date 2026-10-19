@@ -301,6 +301,8 @@
   "chat_history": "Conversation history",
   "chat_you": "You",
   "chat_assistant": "Moni assistant",
+  "chat_table": "Table in assistant reply",
+  "chat_query_fallback": "Message recognition did not finish. New conditions in this message have not been applied, and nothing was added, changed or posted. Below are current entry details using only the previous query conditions.",
   "chat_nontext": "This reply contains non-text content.",
   "chat_busy": "This conversation is busy. Refresh history shortly; new requests are not queued.",
   "chat_working": "Working on your message…",

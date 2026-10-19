@@ -457,9 +457,14 @@ async function reviewPendingBatch() {
 
 describe('WeChat SDK and protected channel', () => {
   it.each([
-    false,
-    true,
-  ])('routes posted-entry detail followups through the classifier and sends actual records with pending drafts=%s', async (withPending) => {
+    { withPending: false, unavailable: false },
+    { withPending: true, unavailable: false },
+    { withPending: false, unavailable: true },
+    { withPending: true, unavailable: true },
+  ])('routes posted-entry detail followups through the classifier with pending drafts=$withPending and unavailable=$unavailable', async ({
+    withPending,
+    unavailable,
+  }) => {
     const { threadId } = await connect('zh');
     expect(
       (
@@ -499,6 +504,13 @@ describe('WeChat SDK and protected channel', () => {
     ];
     await receive([inbound('posted-summary', '看一下我今天花了多少钱')]);
     await tick();
+    if (withPending && unavailable) {
+      intentResult = 'review_pending';
+      await receive([inbound('review-before-outage', '看看待确认草稿')]);
+      await tick();
+      expect((await stored()).confirmation).toBeDefined();
+      intentResult = 'other';
+    }
     modelTools = [
       {
         name: 'query_ledger',
@@ -513,9 +525,17 @@ describe('WeChat SDK and protected channel', () => {
       },
     ];
     const classifications = intentInputs.length;
+    const mainCalls = modelInputs.length;
+    intentFailure = unavailable;
     await receive([inbound('posted-details', '具体的账目给我看一下')]);
     await tick();
-    expect(intentInputs.length).toBe(classifications + 1);
+    expect(intentInputs.length).toBe(classifications + (unavailable ? 2 : 1));
+    if (unavailable) {
+      expect(modelInputs.length).toBe(mainCalls);
+      expect((await stored()).confirmation).toBeUndefined();
+      modelTools = [];
+    }
+    intentFailure = false;
     const input = intentInputs.at(-1) as {
       messages: { role: string; content: string }[];
     };
@@ -532,6 +552,7 @@ describe('WeChat SDK and protected channel', () => {
     expect(reply).toContain('合成肯德基午餐');
     expect(reply).toContain('在肯德基吃的');
     expect(reply).toContain('¥35.00');
+    if (unavailable) expect(reply).toContain('上一次查询条件');
     expect(reply).not.toContain('没有待确认草稿');
     expect(reply).not.toContain('Synthetic saved answer');
     expect(await (await api('entries')).json()).toHaveLength(1);
