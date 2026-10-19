@@ -1,7 +1,7 @@
 import { chat, createModel, maxIterations, toolDefinition } from '@tanstack/ai';
 import { openaiCompatible } from '@tanstack/ai-openai/compatible';
 import { z } from 'zod';
-import { aiConfiguration } from './ai-config';
+import { aiConfiguration } from './ai-settings';
 
 const intent = z.enum([
   'confirm',
@@ -39,7 +39,7 @@ export async function conversationIntent(
   review: ConfirmationContext,
   signal?: AbortSignal
 ): Promise<ConfirmationIntent | null> {
-  const config = aiConfiguration(env);
+  const config = await aiConfiguration(env);
   if (!config) return null;
   const startedAt = Date.now();
   const timeouts = [15000, 30000];
@@ -71,7 +71,7 @@ export async function conversationIntent(
 }
 
 async function classifyIntent(
-  config: NonNullable<ReturnType<typeof aiConfiguration>>,
+  config: NonNullable<Awaited<ReturnType<typeof aiConfiguration>>>,
   text: string,
   review: ConfirmationContext,
   timeoutMs: number,

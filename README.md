@@ -4,7 +4,7 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni)
 
-**当前为 v0.1 部署候选版。** 按钮使用此仓库默认分支的已发布代码；真实部署与 Access 保护仍在验收，进展见[部署验证记录](docs/verification/deployment-readiness.md)与[验收总表](docs/verification/v0.1-acceptance.md)。
+**当前为 v0.1 部署候选版。** 按钮使用此仓库默认分支的已发布代码；首次真实部署与本人 Access 已验证；部署后网页 AI 配置与微信扫码的实现及验证见[网页配置记录](docs/verification/web-configuration.md)，完整发布边界见[部署验证记录](docs/verification/deployment-readiness.md)与[验收总表](docs/verification/v0.1-acceptance.md)。
 
 ## 功能
 
@@ -21,13 +21,13 @@ AI 未配置时，手动记账、筛选、统计、手填折算和备份恢复�
 1. 点击上方 **Deploy to Cloudflare**，登录 Cloudflare 并授权 GitHub，确认仓库和应用名称。**无需填写 AI Key 或微信配置。**
 2. 接受自动识别的构建命令 `pnpm run build`、部署命令 `pnpm run deploy`，等待 Worker、D1、会话 DO 和数据库迁移完成。
 3. 打开 Cloudflare 给出的地址，即可看到首次使用引导与存储准备状态。
-4. 按引导配置只允许本人的 Cloudflare Access，验证身份后选择主币种与时区，开始手动记账。AI 与微信可稍后配置。
+4. 按引导配置只允许本人的 Cloudflare Access，验证身份后选择主币种与时区，开始手动记账。AI 可稍后在网页设置中填写，微信在同一设置页扫码连接。
 
 详细步骤见[部署指南](docs/deployment.md)。Access 本人策略及身份绑定须由部署者完成；完成前只能读取通用引导，业务接口继续拒绝访问，不存在首位访问者认领账本。
 
 可在 Cloudflare 控制台给自己的实例绑定自定义域名；公共默认配置保留 `workers.dev`，不会预填项目维护者的域名或账号。
 
-密钥只设为 **Cloudflare Secrets**。Key、访问令牌、个人模型配置、本人身份和私人账目不得提交到 Git。[本地配置示例](config/local.vars.example)只有空值，并特意避开部署按钮的密钥自动识别文件名；真实本机配置 `.dev.vars` 必须被 Git 忽略。
+部署脚本自动生成加密主密钥并保存为 **Cloudflare Secrets**，重复部署保留已有密钥。本人登录后可在网页填写 AI Key、Base URL 和模型；凭据用独立主密钥加密保存在服务端，不回显 Key、不进入业务备份。微信直接在设置页扫码，无需手填底层加密密钥。Key、访问令牌、个人模型配置、本人身份和私人账目不得提交到 Git。[本地配置示例](config/local.vars.example)只有空值，并特意避开部署按钮的密钥自动识别文件名；真实本机配置 `.dev.vars` 必须被 Git 忽略。
 
 ## 本地开发与验证
 

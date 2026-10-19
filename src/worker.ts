@@ -43,7 +43,13 @@ import {
 } from './ledger/taxonomy';
 import { type EntryTransition, transitionEntry } from './ledger/trash';
 import { AccessError, verifyAccess } from './lib/access';
-import { aiConfiguration } from './lib/ai-config';
+import {
+  aiConfiguration,
+  clearAiSettings,
+  readAiSettings,
+  saveAiSettings,
+  testAiSettings,
+} from './lib/ai-settings';
 import { chatPersistence } from './lib/chat-persistence';
 import { HttpError, privateResponse, readJson } from './lib/http';
 import { limits } from './lib/limits';
@@ -60,6 +66,25 @@ export async function handlePrivateApi(
   try {
     await verifyAccess(request, env);
     const url = new URL(request.url);
+    if (url.pathname === '/api/ai' || url.pathname === '/api/ai/test') {
+      if (url.pathname === '/api/ai/test' && request.method === 'POST')
+        return privateResponse(
+          Response.json(await testAiSettings(env, await readJson(request)))
+        );
+      if (url.pathname === '/api/ai') {
+        if (request.method === 'GET')
+          return privateResponse(Response.json(await readAiSettings(env)));
+        if (request.method === 'PUT')
+          return privateResponse(
+            Response.json(await saveAiSettings(env, await readJson(request)))
+          );
+        if (request.method === 'DELETE')
+          return privateResponse(
+            Response.json(await clearAiSettings(env, await readJson(request)))
+          );
+      }
+      throw new HttpError(405, 'method_not_allowed');
+    }
     if (url.pathname === '/api/posting-policy') {
       if (request.method === 'GET')
         return privateResponse(Response.json(await readPostingPolicy(env.DB)));
@@ -394,7 +419,7 @@ export async function handlePrivateApi(
       return privateResponse(
         Response.json({
           ...(await readSettings(env.DB)),
-          aiConfigured: Boolean(aiConfiguration(env)),
+          aiConfigured: Boolean(await aiConfiguration(env)),
           postingMode: (await readPostingPolicy(env.DB)).mode,
         })
       );
@@ -418,7 +443,7 @@ export async function handlePrivateApi(
       if (!state) throw new HttpError(503, 'storage_not_ready');
       return privateResponse(
         Response.json({
-          aiConfigured: Boolean(aiConfiguration(env)),
+          aiConfigured: Boolean(await aiConfiguration(env)),
           datasetId: state.active_dataset,
         })
       );

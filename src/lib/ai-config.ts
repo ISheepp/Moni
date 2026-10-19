@@ -1,5 +1,19 @@
-export function aiConfiguration(env: Env) {
-  if (!env.AI_API_KEY || !env.AI_BASE_URL || !env.AI_MODEL) return null;
+export type AiConfiguration = {
+  apiKey: string;
+  baseURL: string;
+  model: string;
+};
+
+export function environmentAiConfiguration(
+  env: Pick<Env, 'AI_API_KEY' | 'AI_BASE_URL' | 'AI_MODEL'>
+): AiConfiguration | null {
+  if (
+    !env.AI_API_KEY ||
+    !env.AI_BASE_URL ||
+    !env.AI_MODEL ||
+    env.AI_API_KEY.length > 8192
+  )
+    return null;
   try {
     const url = new URL(env.AI_BASE_URL);
     if (

@@ -10,6 +10,7 @@ export async function deploymentSetupPage(request: Request, env: Env) {
       await env.DB.prepare(`SELECT 1 FROM moni_state s
         JOIN datasets d ON d.id = s.active_dataset
         JOIN posting_policy p ON p.singleton = 1
+        LEFT JOIN service_configuration c ON c.name = 'ai'
         WHERE s.singleton = 1 LIMIT 1`).first()
     );
   } catch {
@@ -66,7 +67,7 @@ export function restrictedPage(
     <ol><li>${zh ? '在 Cloudflare 控制台打开此应用的 Access，选择 All traffic，仅允许你本人的邮箱或身份。' : 'In the Cloudflare dashboard, open Access for this Worker, choose All traffic and allow only your own email or identity.'}</li>
     <li>${zh ? '按照部署指南，在 Cloudflare Secrets 中完成 Access 与本人身份绑定。' : 'Follow the deployment guide to configure Access and bind your owner identity using Cloudflare Secrets.'}</li>
     <li>${zh ? '重新验证访问，登录后选择主币种与时区，即可开始手动记账。' : 'Verify access again, sign in, then choose your primary currency and time zone to start manual bookkeeping.'}</li></ol></section>
-    <div class="notice"><strong>${zh ? 'AI 和微信可以稍后配置' : 'AI and WeChat can wait'}</strong><p>${zh ? '无需模型 Key 或微信连接，即可完成部署。本人验证后可先使用手动记账、筛选、统计与备份。' : 'Deployment needs no model key or WeChat connection. After owner verification, manual entries, filters, reports and backups are available.'}</p></div>
+    <div class="notice"><strong>${zh ? 'AI 和微信可以稍后配置' : 'AI and WeChat can wait'}</strong><p>${zh ? '无需模型 Key 或微信连接，即可完成部署。本人验证后可在设置中填写 AI 配置或扫码连接微信，也可先手动记账。' : 'Deployment needs no model key or WeChat connection. After owner verification, configure AI or scan to connect WeChat in Settings, or start with manual entries.'}</p></div>
     <p>${zh ? '此页仅提供状态与说明，不接受密钥，也不提供账本认领入口。' : 'This page provides status and instructions only. It accepts no keys and cannot assign ledger ownership.'}</p>
     <a href="https://github.com/ISheepp/Moni/blob/main/docs/deployment.md" rel="noreferrer">${zh ? '查看部署指南' : 'Read deployment guide'}</a>`
     : `<div class="notice"><strong>${incomplete ? (zh ? '必要配置未完成' : 'Required setup is incomplete') : zh ? '访问验证未完成' : 'Access verification is incomplete'}</strong><p>${zh ? '为保护你的数据安全，请完成访问验证后再使用。' : 'Complete access verification before using your private ledger.'}</p></div>

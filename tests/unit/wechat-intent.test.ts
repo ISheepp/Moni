@@ -2,6 +2,15 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { conversationIntent } from '../../src/lib/conversation-intent';
 import { wechatConfirmationIntent } from '../../src/lib/wechat-confirmation-intent';
 
+vi.mock('../../src/lib/ai-settings', async () => {
+  const { environmentAiConfiguration } = await import(
+    '../../src/lib/ai-config'
+  );
+  return {
+    aiConfiguration: async (env: Env) => environmentAiConfiguration(env),
+  };
+});
+
 const env = {
   AI_API_KEY: 'synthetic-key-not-a-secret',
   AI_BASE_URL: 'https://model.invalid/v1',

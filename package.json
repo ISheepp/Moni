@@ -8,7 +8,7 @@
     "dev": "vite dev --host 127.0.0.1 --port 3000 --strictPort",
     "build": "vite build && tsc --noEmit",
     "preview": "vite preview",
-    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy && node scripts/bootstrap-deployment-secrets.mjs",
     "deploy:local": "pnpm run build && pnpm run deploy",
     "build:preview": "CLOUDFLARE_ENV=preview pnpm run build",
     "deploy:preview": "CLOUDFLARE_ENV=preview pnpm run deploy:local",
@@ -46,7 +46,7 @@
         "description": "Exact Access user ID (JWT sub) of the single owner. Obtain from your own Zero Trust user details; never bind the first visitor automatically."
       },
       "AI_API_KEY": {
-        "description": "Optional model API key, stored as a Cloudflare Secret. Leave empty to use manual bookkeeping without AI."
+        "description": "Optional legacy environment fallback. Prefer configuring AI in owner-only web Settings after deployment."
       },
       "AI_BASE_URL": {
         "description": "Optional private OpenAI-compatible provider base URL. Keep provider settings server-side and configure together with AI_API_KEY and AI_MODEL."
@@ -58,7 +58,10 @@
         "description": "Optional ClawBot receiver. SQLite Durable Object keeps encrypted credentials, inbox, deduplication and polling cursor separate from business backups."
       },
       "WECHAT_SECRET": {
-        "description": "Optional 64 random hex characters stored as a Cloudflare Secret. Encrypts dynamic WeChat credentials and reply context on the server. Use a distinct value per deployment; changing it requires reconnecting WeChat."
+        "description": "Generated once by the deploy script as a Worker Secret. Encrypts WeChat credentials and reply context. Preserve it on redeploy; the owner only needs to scan a QR code."
+      },
+      "CONFIG_ENCRYPTION_KEY": {
+        "description": "Generated once by the deploy script as a Worker Secret. Encrypts web-configured AI credentials; never rotate during ordinary redeploys."
       }
     }
   },

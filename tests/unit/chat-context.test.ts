@@ -9,6 +9,15 @@ import { openaiCompatible } from '@tanstack/ai-openai/compatible';
 import { afterEach, expect, it, vi } from 'vitest';
 import { conversationContext } from '../../src/lib/chat-context';
 
+vi.mock('../../src/lib/ai-settings', async () => {
+  const { environmentAiConfiguration } = await import(
+    '../../src/lib/ai-config'
+  );
+  return {
+    aiConfiguration: async (env: Env) => environmentAiConfiguration(env),
+  };
+});
+
 const env = {
   AI_API_KEY: 'synthetic-key-not-a-secret',
   AI_BASE_URL: 'https://model.invalid/v1',

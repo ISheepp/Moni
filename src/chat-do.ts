@@ -17,7 +17,7 @@ import { readRunDraftIds, runDraftReceipt } from './ledger/draft-outcomes';
 import { visibleDraftReview } from './ledger/draft-review';
 import { readPostingPolicy } from './ledger/posting-policy';
 import { webDraftReply, webDraftStream } from './ledger/web-draft-review';
-import { aiConfiguration } from './lib/ai-config';
+import { aiConfiguration } from './lib/ai-settings';
 import { conversationContext } from './lib/chat-context';
 import {
   assertChatExecution,
@@ -207,7 +207,7 @@ export class Conversation extends DurableObject<Env> {
           { status: 409 }
         );
       }
-      const config = aiConfiguration(this.env);
+      const config = await aiConfiguration(this.env);
       if (!config) {
         await this.clearActive(active.token);
         return Response.json({ error: 'ai_not_configured' }, { status: 503 });

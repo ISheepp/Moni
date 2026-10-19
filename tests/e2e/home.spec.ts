@@ -65,7 +65,14 @@ test('owner initializes an empty private ledger and keeps language, navigation a
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.getByLabel('Time zone')).toHaveValue('Asia/Tokyo');
   await expect(page.getByText('Configured', { exact: true })).toBeVisible();
-  await expect(page.locator('input[type="password"]')).toHaveCount(0);
+  await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute(
+    'type',
+    'password'
+  );
+  await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('');
+  await expect(page.locator('body')).not.toContainText(
+    'synthetic-fixture-not-a-secret'
+  );
   await page.getByLabel('Language', { exact: true }).selectOption('browser');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await theme.click();

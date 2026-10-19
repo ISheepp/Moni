@@ -19,6 +19,7 @@ import { validateBackup } from '../../src/ledger/backup-contract';
 import { previousLedgerQuery } from '../../src/ledger/chat-query';
 import type { Draft } from '../../src/ledger/drafts';
 import { prepareRestore } from '../../src/ledger/restore';
+import { clearAiSettings, saveAiSettings } from '../../src/lib/ai-settings';
 import { chatPersistence } from '../../src/lib/chat-persistence';
 import { limits } from '../../src/lib/limits';
 import {
@@ -43,6 +44,7 @@ const requests: {
   body: unknown;
 }[] = [];
 const modelInputs: Record<string, unknown>[] = [];
+const modelConnections: { url: string; authorization: string | null }[] = [];
 const intentInputs: Record<string, unknown>[] = [];
 let intentResult = 'other';
 let extraIntentArguments: string | undefined;
@@ -112,7 +114,16 @@ beforeAll(async () => {
         return Response.json({
           keys: [{ ...publicKey, kid: 'wechat-fixture', alg: 'RS256' }],
         });
-      if (request.url === 'https://model.invalid/v1/chat/completions') {
+      if (
+        [
+          'https://model.invalid/v1/chat/completions',
+          'https://web-model.invalid/v1/chat/completions',
+        ].includes(request.url)
+      ) {
+        modelConnections.push({
+          url: request.url,
+          authorization: request.headers.get('Authorization'),
+        });
         const json = (await request.json()) as {
           messages: { role: string; content: string }[];
           tools?: { function: { name: string } }[];
@@ -307,6 +318,7 @@ beforeEach(async () => {
   await bot().disconnect();
   requests.length = 0;
   modelInputs.length = 0;
+  modelConnections.length = 0;
   summaryInputs.length = 0;
   summaryFailure = false;
   intentInputs.length = 0;
@@ -444,6 +456,43 @@ async function reviewPendingBatch() {
 }
 
 describe('WeChat SDK and protected channel', () => {
+  it('can bind before AI setup, then uses web configuration for drafting and confirmation', async () => {
+    try {
+      await clearAiSettings(env, { version: 0, confirmed: true });
+      await connect('zh');
+      await receive([inbound('web-config-before-ai', '合成午餐35')]);
+      await tick();
+      expect(modelConnections).toHaveLength(0);
+      expect(JSON.stringify(await sendBodies())).toContain('AI 配置');
+      await saveAiSettings(env, {
+        version: 1,
+        apiKey: 'synthetic-web-wechat-key',
+        baseURL: 'https://web-model.invalid/v1',
+        model: 'web-model',
+      });
+      action = 'draft';
+      await receive([inbound('web-config-draft', '合成午餐35')]);
+      await tick();
+      intentResult = 'confirm';
+      await receive([inbound('web-config-confirm', '确认')]);
+      await tick();
+      expect(await (await api('entries')).json()).toHaveLength(1);
+      expect(intentInputs.length).toBeGreaterThan(0);
+      expect(modelConnections.length).toBeGreaterThan(1);
+      expect(
+        modelConnections.every(
+          (call) =>
+            call.url === 'https://web-model.invalid/v1/chat/completions' &&
+            call.authorization === 'Bearer synthetic-web-wechat-key'
+        )
+      ).toBe(true);
+    } finally {
+      await bot().disconnect();
+      await env.DB.prepare(
+        "DELETE FROM service_configuration WHERE name='ai'"
+      ).run();
+    }
+  });
   it('rejects mixed valid and malformed classification before posting and still accepts a later valid confirmation', async () => {
     await connect('zh');
     action = 'draft';

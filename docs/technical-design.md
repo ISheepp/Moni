@@ -83,7 +83,7 @@ DO 仅通过服务端 binding 调用，不另设可绕过 Access 的公开入口
 
 ### 4.2 密钥与缓存
 
-- DeepSeek Key 只读取 Worker/DO 运行时的 Secrets，不进入前端环境变量、D1 或 DO 持久化状态、工具参数、备份或响应。
+- 2026-10-19 网页配置追加：DeepSeek Key 可由本人在 Access 保护的设置页提交，服务端以 AES-GCM 密文保存在独立 `service_configuration` 表，主密钥 `CONFIG_ENCRYPTION_KEY` 自动生成并保留为 Cloudflare Secret。Key 不从读取接口回传，不进入前端持久化、D1 明文、DO 协调状态、工具参数、日志或业务备份；恢复账本不改变服务配置。网页配置优先，清除明确禁用，不复活旧环境 Key。具体边界见[网页配置设计](web-configuration.md)。
 - API 地址和模型只允许部署侧配置；聊天输入不能改变目的地址或让工具请求任意 URL。
 - 私有 HTML、业务响应、会话和导出使用禁止共享缓存的策略；不将金融数据写入浏览器离线缓存。
 - 预览与生产使用不同的 D1、DO namespace 和相应配置，预览只使用虚构账目；无法隔离时不启用可写预览。Access 保护、数据库隔离与 DO 隔离分别验证。

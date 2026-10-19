@@ -11,7 +11,7 @@ import {
   withCompaction,
 } from '@tanstack/ai-compaction';
 import { openaiCompatible } from '@tanstack/ai-openai/compatible';
-import { aiConfiguration } from './ai-config';
+import { aiConfiguration } from './ai-settings';
 import { HttpError } from './http';
 import { limits } from './limits';
 
@@ -48,7 +48,7 @@ async function summarizeHistory(
   signal: AbortSignal,
   checkExecution: () => Promise<void>
 ) {
-  const config = aiConfiguration(env);
+  const config = await aiConfiguration(env);
   if (!config) throw new Error('Summary unavailable');
   const provider = openaiCompatible({
     models: [

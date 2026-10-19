@@ -11,10 +11,12 @@ export function WechatSettings({
   datasetId,
   locale,
   onChange,
+  aiConfigured,
 }: {
   datasetId: string;
   locale: AppLocale;
   onChange: () => void;
+  aiConfigured: boolean;
 }) {
   const [status, setStatus] = useState<WechatStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -127,6 +129,11 @@ export function WechatSettings({
       <p className="my-3 text-sm text-muted-foreground">
         {t('wechat_description')}
       </p>
+      {!aiConfigured && (
+        <p className="mb-3 text-sm text-muted-foreground">
+          {t('wechat_ai_setup_hint')}
+        </p>
+      )}
       <output aria-live="polite" className="block font-bold">
         {status ? t(statusKey) : t('probe_loading')}
       </output>

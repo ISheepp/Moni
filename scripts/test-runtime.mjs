@@ -76,6 +76,7 @@ export async function createTestRuntime({
         ACCESS_AUDIENCE: 'browser-fixture',
         OWNER_SUBJECT: 'synthetic-owner',
         WECHAT_SECRET: wechatSecret,
+        CONFIG_ENCRYPTION_KEY: 'abcdef0123456789'.repeat(4),
         ...ai,
         ...access,
       },

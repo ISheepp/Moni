@@ -14,6 +14,7 @@ import {
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { z } from 'zod';
+import { AiSettings } from '@/components/ai-settings';
 import { AppLanguageSwitcher } from '@/components/app-language-switcher';
 import { BackupWorkspace } from '@/components/backup-workspace';
 import { ChatWorkspace } from '@/components/chat-workspace';
@@ -251,9 +252,11 @@ export function MoniApp({
                 locale={locale}
                 onSaved={refresh}
               />
+              <AiSettings locale={locale} onSaved={refresh} />
               <WechatSettings
                 datasetId={settings.datasetId}
                 locale={locale}
+                aiConfigured={settings.aiConfigured}
                 onChange={conversationsChanged}
               />
               <Link
@@ -480,23 +483,6 @@ function SettingsForm({
           </SettingRow>
         )}
       </section>
-      {!initialize && (
-        <section className="rounded-2xl border border-foreground/30 bg-surface px-4 md:px-6">
-          <SettingRow
-            icon={<IconRobot aria-hidden />}
-            title={t('app_ai_assistant')}
-            description={t('app_ai_later')}
-          >
-            <span
-              className={`rounded-lg px-3 py-2 text-sm font-bold ${settings.aiConfigured ? 'bg-green/25' : 'bg-muted'}`}
-            >
-              {settings.aiConfigured
-                ? t('app_configured')
-                : t('app_not_configured')}
-            </span>
-          </SettingRow>
-        </section>
-      )}
       <p role="alert" className="text-foreground empty:hidden">
         {error ? t('app_save_error') : ''}
       </p>

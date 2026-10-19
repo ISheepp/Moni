@@ -23,6 +23,7 @@ export default defineConfig(async () => ({
           ACCESS_AUDIENCE: 'synthetic-audience',
           OWNER_SUBJECT: 'synthetic-owner',
           WECHAT_SECRET: '0123456789abcdef'.repeat(4),
+          CONFIG_ENCRYPTION_KEY: 'abcdef0123456789'.repeat(4),
         },
       },
     }),
@@ -30,6 +31,8 @@ export default defineConfig(async () => ({
   test: {
     // Each suite boots real D1/DO; avoid starving multi-message tests.
     maxWorkers: 1,
+    // Real D1/DO multi-turn cases need headroom on busy local machines.
+    testTimeout: 30000,
     include: ['tests/worker/**/*.test.ts'],
     setupFiles: ['./tests/worker/setup.ts'],
   },

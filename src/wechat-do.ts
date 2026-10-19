@@ -19,6 +19,7 @@ import { type Draft, queryDrafts } from './ledger/drafts';
 import { displayMoney } from './ledger/money';
 import { readSettings } from './ledger/settings';
 import { readTaxonomy } from './ledger/taxonomy';
+import { aiConfiguration } from './lib/ai-settings';
 import { categoryLabel } from './lib/category-label';
 import { chatPersistence } from './lib/chat-persistence';
 import { assertChanged, executeCommand } from './lib/command';
@@ -680,9 +681,12 @@ export class WechatBot extends DurableObject<Env> {
             .json<{ error?: string }>()
             .catch(() => null);
           delivery.reply = message(
-            error?.error === 'history_limit' || error?.error === 'context_limit'
-              ? 'wechat_context_limit'
-              : 'wechat_ai_failed',
+            error?.error === 'ai_not_configured'
+              ? 'wechat_ai_setup_hint'
+              : error?.error === 'history_limit' ||
+                  error?.error === 'context_limit'
+                ? 'wechat_context_limit'
+                : 'wechat_ai_failed',
             delivery.locale
           );
         } else {
@@ -934,6 +938,8 @@ export class WechatBot extends DurableObject<Env> {
         review.threadId === state.threadId &&
         review.operationId === delivery.reviewOperationId
     );
+    if (!delivery.confirmationIntent && !(await aiConfiguration(this.env)))
+      return message('wechat_ai_setup_hint', delivery.locale);
     const decision =
       delivery.confirmationIntent ??
       (await conversationIntent(
