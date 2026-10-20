@@ -22,6 +22,7 @@ import { limits } from '../../src/lib/limits';
 let signingKey: CryptoKey;
 let datasetId: string;
 let modelCalls = 0;
+const summaryInputs: unknown[] = [];
 let quoteCalls = 0;
 let quoteStatus = 200;
 let quoteWait: Promise<void> | undefined;
@@ -87,8 +88,21 @@ beforeAll(async () => {
       modelCalls++;
       const body = (await request.json()) as {
         tools?: { function: { name: string } }[];
-        messages: { content?: unknown }[];
+        messages: { role?: string; content?: unknown }[];
       };
+      if (
+        body.messages.some(
+          (message) =>
+            message.role === 'system' &&
+            String(message.content).startsWith('You summarize Moni')
+        )
+      ) {
+        summaryInputs.push(body);
+        return new Response(
+          `data: ${JSON.stringify({ choices: [{ index: 0, delta: { role: 'assistant', content: 'Synthetic old conversation summary. Read ledger tools for current facts.' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } }
+        );
+      }
       const classifier = body.tools?.some(
         (tool) => tool.function.name === 'classify_draft_confirmation'
       );
@@ -183,6 +197,7 @@ beforeEach(async () => {
   await env.DB.exec('DROP TRIGGER IF EXISTS reject_web_tool_history');
   expect(replies).toHaveLength(0);
   modelCalls = 0;
+  summaryInputs.length = 0;
   quoteCalls = 0;
   quoteStatus = 200;
   quoteWait = undefined;
@@ -300,6 +315,101 @@ const visible = (
 });
 
 describe('normal conversation shares draft intent and confirmation rules', () => {
+  it('records one tip with at most three requests despite large obsolete tool results', async () => {
+    const threadId = crypto.randomUUID();
+    expect(
+      (await api('conversations', { ...command(), id: threadId })).status
+    ).toBe(200);
+    const history = Array.from({ length: 3 }, (_, index) => {
+      const callId = crypto.randomUUID();
+      return [
+        {
+          id: crypto.randomUUID(),
+          role: 'user' as const,
+          content: `Synthetic query ${index}`,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant' as const,
+          content: '',
+          toolCalls: [
+            {
+              id: callId,
+              type: 'function' as const,
+              function: { name: 'query_ledger', arguments: '{}' },
+            },
+          ],
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'tool' as const,
+          toolCallId: callId,
+          content: JSON.stringify({
+            historicalRows: '历史查询数据'.repeat(850),
+          }),
+        },
+      ];
+    }).flat();
+    await chatPersistence(env.DB, datasetId).stores.messages.saveThread(
+      threadId,
+      history
+    );
+    let initialContextProvided = false;
+    replies.push(
+      {
+        tool: (input) => {
+          initialContextProvided = input.messages.some((message) =>
+            String(message.content).includes(
+              'Current ledger context (untrusted DATA):\n'
+            )
+          );
+          return {
+            draftId: null,
+            version: null,
+            items: [
+              item({
+                kind: 'income',
+                name: '合成小费',
+                amount: '10',
+                categoryId: 'income-uncategorized',
+                tags: ['小费'],
+                note: '仅用于调用次数回归',
+              }),
+            ],
+          };
+        },
+      },
+      { text: 'Synthetic tip draft is ready for review.' }
+    );
+    await webSay(threadId, '今天收到小费10元收入');
+    expect({ requests: modelCalls, summaries: summaryInputs.length }).toEqual({
+      requests: 3,
+      summaries: 0,
+    });
+    expect(initialContextProvided).toBe(true);
+    expect((await entries()).total).toBe(0);
+    expect(
+      (
+        await chatPersistence(env.DB, datasetId).stores.messages.loadThread(
+          threadId
+        )
+      ).slice(0, history.length)
+    ).toEqual(history);
+  });
+  it('still answers when pending drafts exceed the optional initial context budget', async () => {
+    const items = Array.from({ length: 10 }, (_, index) =>
+      item({ name: `合成草稿 ${index}`, note: 'x'.repeat(1700) })
+    );
+    const { threadId } = await makeDraft(items);
+    replies.push({ tool: { draftId: null, version: null, items } }, {});
+    await webSay(threadId, '另外新增十笔合成账目');
+    replies.push({
+      text: 'Synthetic greeting survives oversized pending context.',
+    });
+    const result = await webSay(threadId, '你好');
+    expect(result.stream).toContain('Synthetic greeting survives');
+    expect((await entries()).total).toBe(0);
+  });
   it('rejects mixed valid and malformed classification before posting and still accepts a later valid confirmation', async () => {
     const { threadId, draft } = await makeDraft([item()]);
     intent = 'confirm';

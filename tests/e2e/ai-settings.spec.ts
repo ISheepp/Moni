@@ -147,7 +147,12 @@ test('owner configures AI after deploy, tests, updates without reentering the ke
     .click();
   await expect(card.getByText(/AI configuration saved/)).toBeVisible();
   await page.getByRole('link', { name: 'Chat', exact: true }).click();
-  await page.getByRole('textbox').fill('Synthetic configuration smoke');
+  await page
+    .getByRole('textbox', {
+      name: 'Add an entry, or ask your ledger…',
+      exact: true,
+    })
+    .fill('Synthetic configuration smoke');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(
     page

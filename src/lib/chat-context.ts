@@ -6,6 +6,7 @@ import {
   maxIterations,
 } from '@tanstack/ai';
 import {
+  composeStrategies,
   evictOldest,
   summarizeOldest,
   withCompaction,
@@ -147,20 +148,35 @@ export function conversationContext(
   const compaction = withCompaction({
     maxTokens: limits.contextTokens,
     estimateTokens: contextTokens,
-    strategyKey: 'moni-summary-window-v1',
+    strategyKey: 'moni-summary-window-v2',
     strategy: (messages, context) =>
-      summarizeOldest({
-        keepRecentTokens: recentBudget(messages),
-        summarize: async (head) => {
-          if (summaryFailed) throw new Error('Summary unavailable this run');
-          try {
-            return await summarizeHistory(env, head, signal, checkExecution);
-          } catch (error) {
-            summaryFailed = true;
-            throw error;
-          }
+      composeStrategies(
+        (history) => {
+          const current = currentTurn(history);
+          // Old tool snapshots are stale; retain their pairing and every current-turn result.
+          return history.map((message, index) =>
+            message.role === 'tool' && index < current
+              ? {
+                  ...message,
+                  content:
+                    '[Historical tool result omitted; use current ledger context and tools for drafts and financial figures.]',
+                }
+              : message
+          );
         },
-      })(messages, context),
+        summarizeOldest({
+          keepRecentTokens: recentBudget(messages),
+          summarize: async (head) => {
+            if (summaryFailed) throw new Error('Summary unavailable this run');
+            try {
+              return await summarizeHistory(env, head, signal, checkExecution);
+            } catch (error) {
+              summaryFailed = true;
+              throw error;
+            }
+          },
+        })
+      )(messages, context),
   });
   return {
     ...compaction,

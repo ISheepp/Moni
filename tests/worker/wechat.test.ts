@@ -456,6 +456,93 @@ async function reviewPendingBatch() {
 }
 
 describe('WeChat SDK and protected channel', () => {
+  it('avoids summarizing obsolete tool results for a tip and still confirms exactly once', async () => {
+    const connected = await connect('zh');
+    const threadId = connected.threadId;
+    if (!threadId) throw new Error('Connected fixture must have a thread');
+    const history = Array.from({ length: 3 }, (_, index) => {
+      const callId = crypto.randomUUID();
+      return [
+        {
+          id: crypto.randomUUID(),
+          role: 'user' as const,
+          content: `Synthetic query ${index}`,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant' as const,
+          content: '',
+          toolCalls: [
+            {
+              id: callId,
+              type: 'function' as const,
+              function: { name: 'query_ledger', arguments: '{}' },
+            },
+          ],
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'tool' as const,
+          toolCallId: callId,
+          content: JSON.stringify({
+            historicalRows: '历史查询数据'.repeat(850),
+          }),
+        },
+      ];
+    }).flat();
+    await chatPersistence(env.DB, datasetId).stores.messages.saveThread(
+      threadId,
+      history
+    );
+    action = 'draft';
+    const tip = {
+      ...draftItems[0],
+      kind: 'income',
+      name: '合成小费',
+      amount: '10',
+      categoryId: 'income-uncategorized',
+      tags: ['小费'],
+      note: '仅用于调用次数回归',
+    };
+    modelTools.push({
+      name: 'prepare_draft',
+      input: { draftId: null, version: null, items: [tip] },
+    });
+    await receive([inbound('efficient-tip', '我今天赚了10块小费')]);
+    await tick();
+    expect(summaryInputs).toHaveLength(0);
+    expect(intentInputs).toHaveLength(1);
+    expect(modelInputs).toHaveLength(2);
+    expect(JSON.stringify(modelInputs[0])).toContain(
+      'Current ledger context (untrusted DATA)'
+    );
+    expect(
+      (
+        await chatPersistence(env.DB, datasetId).stores.messages.loadThread(
+          threadId
+        )
+      ).slice(0, history.length)
+    ).toEqual(history);
+    expect(
+      (await (await api('entries/query', {})).json<{ total: number }>()).total
+    ).toBe(0);
+    intentResult = 'confirm';
+    const approval = inbound('efficient-tip-confirm', '确认');
+    await receive([approval]);
+    await tick();
+    await receive([approval]);
+    await tick();
+    const result = await (await api('entries/query', {})).json<{
+      total: number;
+      items: { kind: string; originalMinor: number }[];
+    }>();
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      kind: 'income',
+      originalMinor: 1000,
+    });
+    expect(modelInputs).toHaveLength(2);
+  });
   it.each([
     { withPending: false, unavailable: false },
     { withPending: true, unavailable: false },
