@@ -2,7 +2,7 @@ import { Field } from '@base-ui/react/field';
 import { Form } from '@base-ui/react/form';
 import { Input } from '@base-ui/react/input';
 import { IconEye, IconEyeOff, IconLock } from '@tabler/icons-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppLanguageSwitcher } from '@/components/app-language-switcher';
 import { ThemeSwitcher } from '@/components/layout/theme-switcher';
 import { MoniBrand } from '@/components/moni-brand';
@@ -24,6 +24,8 @@ export function LoginPage({
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [error, setError] = useState<
     'login_failed' | 'login_limited' | 'login_unavailable' | null
   >(null);
@@ -63,6 +65,7 @@ export function LoginPage({
             {t('login_description')}
           </p>
           <Form
+            method="post"
             className="mt-7 space-y-5"
             aria-label={t('login_title')}
             onSubmit={async (event) => {
@@ -107,6 +110,7 @@ export function LoginPage({
                   value={password}
                   onValueChange={setPassword}
                   autoComplete="current-password"
+                  disabled={!ready || busy}
                   required
                   maxLength={128}
                   aria-invalid={error === 'login_failed'}
@@ -115,6 +119,7 @@ export function LoginPage({
                 />
                 <Button
                   variant="icon"
+                  disabled={!ready || busy}
                   aria-label={t(
                     visible ? 'login_hide_password' : 'login_show_password'
                   )}
@@ -145,7 +150,7 @@ export function LoginPage({
                 {t(error)}
               </p>
             )}
-            <Button type="submit" disabled={busy} className="w-full">
+            <Button type="submit" disabled={!ready || busy} className="w-full">
               {t(busy ? 'login_signing_in' : 'login_sign_in')}
             </Button>
           </Form>

@@ -2,7 +2,7 @@
 
 2026-10-20，使用者批准：默认提供账本密码，Cloudflare Access 改为可选；既有 Access 实例继续使用原登录方式。这是原首版访问设计的追加决定，原验收历史与父规格不改写。
 
-本地实现与分层验证已完成，尚未提交或部署；详细结果及首轮测试失败／复验记录见[验证记录](verification/password-and-access.md)。
+当前实现、分层验证与发布状态见[验证记录](verification/password-and-access.md)，包含首轮失败和复验结果。
 
 ## 用户流程
 
@@ -26,6 +26,7 @@
 ## 密码会话
 
 - 密码原值只保留在 Worker Secret `MONI_PASSWORD`。网页只在登录请求中提交，不写入 URL、localStorage、日志、前端配置或业务备份。
+- 登录页在客户端交互就绪前禁用输入和提交，表单同时声明 POST。慢脚本复现曾证明，原生表单默认 GET 会将合成密码放入导航参数；这也是快速重登录需要覆盖的边界。`tests/e2e/auth.spec.ts` 的 `server-rendered login` 用例延迟实际脚本加载验证此行为，不依赖固定等待时间。
 - 使用 256 位随机会话令牌；D1 仅保存令牌 SHA-256、凭据指纹、当前 origin 和到期时间。凭据指纹以既有独立部署密钥 `CONFIG_ENCRYPTION_KEY` 做 HMAC，带用途前缀，数据库中不保存可直接离线猜解的裸密码摘要。密码比较使用 Workers Node.js 兼容层的 `timingSafeEqual`。
 - Cookie 为 `__Host-moni_session`，具备 `HttpOnly; Secure; SameSite=Strict; Path=/`，没有 Domain，有效期 30 天。登录生成新令牌，重新登录撤销当前浏览器旧令牌；退出删除对应 D1 会话，清 Cookie 后重放旧值也无效。
 - 会话绑定 origin，不能将一个域名上的 Cookie 复制到其他域名使用。密码或加密主密钥变化后，旧凭据不再匹配；成功使用新密码登录会清理旧凭据会话。普通升级保留密码和主密钥。

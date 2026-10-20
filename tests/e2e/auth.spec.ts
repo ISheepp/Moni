@@ -20,6 +20,54 @@ async function fixture() {
   return value;
 }
 
+test('server-rendered login never sends the password in a navigation before JavaScript is ready', async ({
+  page,
+}) => {
+  const server = await fixture();
+  let release = () => {};
+  const hydration = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/assets/*.js', async (route) => {
+    await hydration;
+    await route.continue();
+  });
+  try {
+    await page.goto(`${server.url}/login`, { waitUntil: 'commit' });
+    await expect(page.locator('form')).toHaveAttribute('method', 'post');
+    const input = page.getByLabel('Ledger password', { exact: true });
+    await expect(input).toBeVisible();
+    const submit = page.getByRole('button', {
+      name: 'Unlock my ledger',
+      exact: true,
+    });
+    if (await input.isEnabled()) {
+      await input.fill(password);
+      const navigation = page.waitForRequest((request) =>
+        request.isNavigationRequest()
+      );
+      await submit.click({ noWaitAfter: true });
+      const request = await navigation;
+      expect(new URL(request.url()).searchParams.has('password')).toBe(false);
+    } else {
+      await expect(submit).toBeDisabled();
+    }
+  } finally {
+    release();
+  }
+  await page.waitForLoadState('load');
+  await page.getByLabel('Ledger password', { exact: true }).fill(password);
+  await page
+    .getByRole('button', { name: 'Unlock my ledger', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', {
+      name: 'Create your private ledger',
+      exact: true,
+    })
+  ).toBeVisible();
+});
+
 test('password login protects the ledger, supports manual entries and survives refresh; sign-out revokes the cookie', async ({
   page,
 }) => {
