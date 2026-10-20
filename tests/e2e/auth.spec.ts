@@ -176,6 +176,11 @@ test('Chinese login follows system theme, remains usable at 320px and ignores ex
     page.getByRole('heading', { name: '建立你的私人账本', exact: true })
   ).toBeVisible();
   expect(new URL(page.url()).origin).toBe(server.url);
+  await page.getByRole('button', { name: '创建账本', exact: true }).click();
+  await page.goto(`${server.url}/zh?view=settings`);
+  await expect(
+    page.getByRole('heading', { name: '设置', exact: true })
+  ).toBeVisible();
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).not.toHaveClass(/dark/);
 });
