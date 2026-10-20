@@ -49,7 +49,10 @@ test('manual foreign entry previews exact conversion, preserves metadata edits a
     .getByLabel('Name', { exact: true })
     .fill('Synthetic USD promotion');
   await page.getByLabel('Amount', { exact: true }).fill('20');
-  await page.getByLabel('Entry currency', { exact: true }).selectOption('USD');
+  await page
+    .getByRole('combobox', { name: 'Entry currency', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'USD', exact: true }).click();
   expect(
     await page
       .getByLabel('Amount', { exact: true })
@@ -73,11 +76,17 @@ test('manual foreign entry previews exact conversion, preserves metadata edits a
   ).toHaveLength(1);
   await page.getByRole('button', { name: 'Manual rate', exact: true }).click();
   await page.getByLabel('Exchange rate', { exact: false }).fill('7.20');
-  await page.getByLabel('Entry currency', { exact: true }).selectOption('EUR');
+  await page
+    .getByRole('combobox', { name: 'Entry currency', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'EUR', exact: true }).click();
   await expect(page.getByLabel('Exchange rate', { exact: false })).toHaveValue(
     ''
   );
-  await page.getByLabel('Entry currency', { exact: true }).selectOption('USD');
+  await page
+    .getByRole('combobox', { name: 'Entry currency', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'USD', exact: true }).click();
   await page.getByLabel('Exchange rate', { exact: false }).fill('7.20');
   await page.getByLabel('Basis date', { exact: true }).fill('2026-10-16');
   await expect(page.getByText('CN¥144.00', { exact: true })).toBeVisible();
@@ -183,7 +192,8 @@ test('manual foreign entry previews exact conversion, preserves metadata edits a
     .getByRole('heading', { name: 'Synthetic USD promotion', exact: true })
     .click();
   await page.getByRole('button', { name: '修改账目', exact: true }).click();
-  await page.getByLabel('账目币种', { exact: true }).selectOption('CNY');
+  await page.getByRole('combobox', { name: '账目币种', exact: true }).click();
+  await page.getByRole('option', { name: 'CNY', exact: true }).click();
   await expect(
     page.getByText('账目币种现与主币种一致，请核对金额后确认保存。', {
       exact: true,

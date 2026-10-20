@@ -1,3 +1,4 @@
+import { Input } from '@base-ui/react/input';
 import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -59,10 +60,10 @@ export function RefundWorkspace({
   }, [load]);
   return (
     <section
-      className="mt-6 rounded-2xl border-2 border-ink bg-surface p-4 md:p-7"
+      className="mt-6 rounded-2xl border border-foreground/10 bg-surface p-4 md:p-6"
       aria-label={t(refund ? 'refund_edit' : 'refund_related')}
     >
-      <Heading className="text-2xl font-extrabold">
+      <Heading className="text-xl font-extrabold">
         {t(refund ? 'refund_edit' : 'refund_related')}
       </Heading>
       {failed && (
@@ -294,9 +295,10 @@ function RefundForm({
         <legend className="mb-4 text-xl font-extrabold">
           {t(refund ? 'refund_edit' : 'refund_register')}
         </legend>
-        <label className="min-w-0 font-bold">
+        <label htmlFor="refund-amount" className="min-w-0 font-bold">
           {t('refund_amount')} ({data.expense.currency})
-          <input
+          <Input
+            id="refund-amount"
             className="moni-field mt-2"
             ref={amountRef}
             inputMode="decimal"
@@ -307,9 +309,10 @@ function RefundForm({
             aria-describedby="refund-available refund-error"
           />
         </label>
-        <label className="font-bold">
+        <label htmlFor="refund-date" className="font-bold">
           {t('refund_date')}
-          <input
+          <Input
+            id="refund-date"
             className="moni-field mt-2"
             type="date"
             required
@@ -320,9 +323,10 @@ function RefundForm({
           />
         </label>
         {foreign && (
-          <label className="font-bold md:col-span-2">
+          <label htmlFor="refund-actual" className="font-bold md:col-span-2">
             {t('refund_actual')} ({settings.primaryCurrency})
-            <input
+            <Input
+              id="refund-actual"
               ref={actualRef}
               inputMode="decimal"
               value={actualAmount}
@@ -334,7 +338,8 @@ function RefundForm({
         )}
         <div className="font-bold md:col-span-2">
           <label htmlFor="refund-note">{t('entry_note')}</label>
-          <textarea
+          <Input
+            render={<textarea rows={3} />}
             id="refund-note"
             className="moni-field mt-2 min-h-24 resize-y"
             ref={noteRef}

@@ -15,7 +15,7 @@ import {
   useChat,
 } from '@tanstack/ai-react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMarkdown } from '@/components/chat-markdown';
 import { DraftCards } from '@/components/draft-cards';
 import { QueryResultCard, queryResults } from '@/components/query-result-card';
@@ -131,6 +131,25 @@ function ChatSession({
     visibleReview.current = review;
   }, []);
   const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    // Zoom and on-screen keyboards can shrink the visible area without resizing the layout viewport.
+    const update = () =>
+      form.current?.style.setProperty(
+        '--chat-viewport-gap',
+        `${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`
+      );
+    update();
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    return () => {
+      viewport.removeEventListener('resize', update);
+      viewport.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
   const remember = useCallback(
     (snapshot: Snapshot) => {
       if (snapshot.conversation) {
@@ -675,7 +694,7 @@ function ChatSession({
       <form
         hidden={conversation?.source === 'wechat'}
         ref={form}
-        className="sticky bottom-24 bg-background pb-3 pt-3 md:bottom-0"
+        className="sticky bottom-[max(6rem,var(--chat-viewport-gap,0px))] bg-background pb-3 pt-3 md:bottom-[var(--chat-viewport-gap,0px)]"
         onSubmit={async (event) => {
           event.preventDefault();
           if (

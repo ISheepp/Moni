@@ -557,5 +557,7 @@
   "report_loading": "正在整理统计…",
   "report_year": "年份",
   "report_previous_year": "上一年",
-  "report_next_year": "下一年"
+  "report_next_year": "下一年",
+  "entry_overview": "查看、筛选和管理每一笔收支。",
+  "entry_loading": "正在整理账目…"
 }

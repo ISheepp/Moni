@@ -190,7 +190,10 @@ test('a fresh owner can initialize, manually book foreign spending, filter notes
     .getByLabel('Name', { exact: true })
     .fill('Synthetic independent promotion');
   await page.getByLabel('Amount', { exact: true }).fill('20');
-  await page.getByLabel('Entry currency', { exact: true }).selectOption('USD');
+  await page
+    .getByRole('combobox', { name: 'Entry currency', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'USD', exact: true }).click();
   await page.getByRole('button', { name: 'Manual rate', exact: true }).click();
   await page.getByLabel('Exchange rate', { exact: false }).fill('7.20');
   await page.getByLabel('Note', { exact: true }).fill('Synthetic KFC keyword');

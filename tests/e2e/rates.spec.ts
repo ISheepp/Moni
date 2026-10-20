@@ -51,7 +51,10 @@ test('historical reference previews both dates, freezes its basis and keeps inpu
   await page
     .getByLabel('Note', { exact: true })
     .fill('Synthetic historical note');
-  await page.getByLabel('Entry currency', { exact: true }).selectOption('USD');
+  await page
+    .getByRole('combobox', { name: 'Entry currency', exact: true })
+    .click();
+  await page.getByRole('option', { name: 'USD', exact: true }).click();
   await expect(page.getByText('CN¥144.00', { exact: true })).toBeVisible();
   await expect(
     page.getByText('1 USD ≈ 7.2 CNY · Actual quotation date：2024-05-17', {

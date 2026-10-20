@@ -2,6 +2,7 @@ import { IconDownload } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type AppLocale, message } from '@/lib/locale';
+import { cn } from '@/lib/utils';
 
 export function DownloadButton({
   path,
@@ -13,6 +14,7 @@ export function DownloadButton({
   primary = false,
   disabled = false,
   onDownloaded,
+  className,
 }: {
   path: string;
   body?: unknown;
@@ -23,6 +25,7 @@ export function DownloadButton({
   primary?: boolean;
   disabled?: boolean;
   onDownloaded?: (headers: Headers) => void;
+  className?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<number | null>(null);
@@ -33,7 +36,7 @@ export function DownloadButton({
       <Button
         variant={primary ? 'primary' : 'plain'}
         disabled={busy || disabled}
-        className="w-full md:w-auto"
+        className={cn('w-full md:w-auto', className)}
         onClick={async () => {
           setBusy(true);
           setFailure(null);

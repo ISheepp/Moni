@@ -172,9 +172,9 @@ test('category names reach forms and details; tag merge deduplicates actual entr
   ).toBeVisible();
   await expect(page.getByText('Synthetic note', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '修改账目', exact: true }).click();
-  await expect(page.getByLabel('类目', { exact: true })).toHaveValue(
-    category.id
-  );
+  await expect(
+    page.getByRole('combobox', { name: '类目', exact: true })
+  ).toContainText('Synthetic trips');
   await expect(page.getByLabel('标签', { exact: true })).toHaveValue(
     'delivery'
   );

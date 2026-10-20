@@ -1,3 +1,4 @@
+import { Input } from '@base-ui/react/input';
 import {
   IconArrowLeft,
   IconEdit,
@@ -11,6 +12,8 @@ import { EntryConfirmation } from '@/components/entry-confirmation';
 import { EntryFilterForm, EntryList } from '@/components/entry-list';
 import { RefundWorkspace } from '@/components/refund-workspace';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Select } from '@/components/ui/select';
 import { prepareConversion } from '@/ledger/conversion';
 import { type Currency, currencies } from '@/ledger/currencies';
 import { todayInZone } from '@/ledger/dates';
@@ -102,7 +105,22 @@ export function EntryWorkspace({
       loadGeneration.current++;
     };
   }, [load]);
-  if (loading) return <output>{t('probe_loading')}</output>;
+  if (loading)
+    return (
+      <div aria-busy="true" className="space-y-5">
+        <output className="text-sm text-muted-foreground">
+          {t('entry_loading')}
+        </output>
+        <div
+          aria-hidden
+          className="h-32 rounded-2xl bg-muted/35 motion-safe:animate-pulse"
+        />
+        <div
+          aria-hidden
+          className="h-72 rounded-2xl bg-muted/35 motion-safe:animate-pulse"
+        />
+      </div>
+    );
   if (failed)
     return (
       <div>
@@ -191,36 +209,39 @@ export function EntryWorkspace({
           <IconArrowLeft aria-hidden size={20} />
           {t('app_entries')}
         </Link>
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <h1 className="min-w-0 max-w-full break-words text-3xl font-extrabold">
             {current.name}
           </h1>
-          <Button
-            variant="plain"
-            onClick={() =>
-              navigate({
-                to: '/',
-                search: {
-                  view: 'entries',
-                  entry: current.id,
-                  edit: true,
-                  filters,
-                },
-              })
-            }
-          >
-            <IconEdit aria-hidden size={20} />
-            {t('entry_edit')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="plain"
+              className="border-foreground/15!"
+              onClick={() =>
+                navigate({
+                  to: '/',
+                  search: {
+                    view: 'entries',
+                    entry: current.id,
+                    edit: true,
+                    filters,
+                  },
+                })
+              }
+            >
+              <IconEdit aria-hidden size={20} />
+              {t('entry_edit')}
+            </Button>
+            <Button
+              variant="plain"
+              className="border-foreground/15! text-muted-foreground"
+              onClick={() => setDeleting(true)}
+            >
+              <IconTrash size={20} aria-hidden />
+              {t('trash_delete')}
+            </Button>
+          </div>
         </div>
-        <Button
-          variant="plain"
-          className="mb-5"
-          onClick={() => setDeleting(true)}
-        >
-          <IconTrash size={20} aria-hidden />
-          {t('trash_delete')}
-        </Button>
         {deleting && (
           <EntryConfirmation
             entry={current}
@@ -233,7 +254,7 @@ export function EntryWorkspace({
             }}
           />
         )}
-        <section className="rounded-2xl border-2 border-ink bg-surface p-5 md:p-8">
+        <section className="rounded-2xl border border-foreground/10 bg-surface p-5 md:p-7">
           <p className="text-sm text-muted-foreground">
             {t(
               current.kind === 'income'
@@ -243,7 +264,7 @@ export function EntryWorkspace({
                   : 'entry_expense'
             )}
           </p>
-          <p className="mt-2 break-words text-3xl font-extrabold tabular-nums">
+          <p className="mt-3 break-words text-3xl font-extrabold tracking-tight tabular-nums md:text-4xl">
             {displayMoney(current.originalMinor, current.currency, locale)}
           </p>
           {current.conversion && (
@@ -281,7 +302,7 @@ export function EntryWorkspace({
               </p>
             </div>
           )}
-          <dl className="mt-7 grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-5">
+          <dl className="mt-7 grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-5 border-t border-foreground/10 pt-6 text-sm">
             <dt className="text-muted-foreground">{t('entry_date')}</dt>
             <dd>{current.date}</dd>
             <dt className="text-muted-foreground">{t('entry_category')}</dt>
@@ -334,10 +355,18 @@ export function EntryWorkspace({
     );
   return (
     <>
-      <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl font-extrabold">{t('app_entries')}</h1>
-        <div className="flex flex-wrap gap-3">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 md:mb-8">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+            {t('app_entries')}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t('entry_overview')}
+          </p>
+        </div>
+        <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto">
           <DownloadButton
+            className="border-foreground/15! text-sm!"
             path="exports/csv"
             body={{ datasetId: settings.datasetId, filters }}
             datasetId={settings.datasetId}
@@ -346,6 +375,7 @@ export function EntryWorkspace({
             locale={locale}
           />
           <Button
+            className="text-sm! sm:flex-none"
             onClick={() =>
               navigate({
                 to: '/',
@@ -543,16 +573,17 @@ function EntryForm({
     }
   }
   return (
-    <>
-      <button
+    <div className="mx-auto max-w-4xl">
+      <Button
+        variant="plain"
         type="button"
-        className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-lg font-bold focus-visible:outline-4 focus-visible:outline-focus disabled:opacity-70"
+        className="mb-2 border-0! bg-transparent! px-0! shadow-none!"
         onClick={onCancel}
         disabled={busy}
       >
         <IconArrowLeft size={20} aria-hidden />
         {t('app_entries')}
-      </button>
+      </Button>
       <div className="relative mb-5 md:flex md:items-center md:justify-between md:gap-3">
         <div>
           <h1 className="pr-20 text-3xl font-extrabold md:pr-0">
@@ -642,32 +673,31 @@ function EntryForm({
             setBusy(false);
           }
         }}
-        className="rounded-2xl border-2 border-ink bg-surface p-4 md:p-7"
+        className="rounded-2xl border border-foreground/10 bg-surface p-4 md:p-7"
       >
         <fieldset
           disabled={busy}
           className="grid min-w-0 gap-4 md:grid-cols-2 md:gap-5"
         >
           <legend className="sr-only">{t('entry_form_hint')}</legend>
-          <div className="grid grid-cols-2 gap-3 md:col-span-2">
-            {(['expense', 'income'] as const).map((value) => (
-              <Button
-                key={value}
-                variant={kind === value ? 'secondary' : 'plain'}
-                aria-pressed={kind === value}
-                onClick={() => {
-                  setKind(value);
-                  setCategoryId(`${value}-uncategorized`);
-                }}
-              >
-                {t(value === 'expense' ? 'entry_expense' : 'entry_income')}
-              </Button>
-            ))}
+          <div className="md:col-span-2">
+            <SegmentedControl
+              label={t('query_type')}
+              value={kind}
+              onValueChange={(value) => {
+                setKind(value);
+                setCategoryId(`${value}-uncategorized`);
+              }}
+              items={[
+                { value: 'expense', label: t('entry_expense') },
+                { value: 'income', label: t('entry_income') },
+              ]}
+            />
           </div>
           <div className="font-bold">
             <label htmlFor="entry-amount">{t('entry_amount')}</label>
             <div className="mt-2 flex items-center gap-3">
-              <input
+              <Input
                 ref={amountRef}
                 id="entry-amount"
                 aria-invalid={error === 'amount'}
@@ -680,36 +710,33 @@ function EntryForm({
                 required
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="moni-field min-w-0 flex-1"
+                className="moni-field min-w-0 flex-1 text-xl! font-extrabold tabular-nums"
               />
               <span id="entry-amount-currency" className="sr-only">
                 {currency}
               </span>
               <div className="w-28 shrink-0">
-                <select
-                  id="entry-currency"
-                  aria-label={t('fx_currency')}
+                <Select
+                  label={t('fx_currency')}
                   value={currency}
-                  onChange={(event) => {
-                    setCurrency(event.target.value as Currency);
+                  onValueChange={(value) => {
+                    setCurrency(value);
                     setRate('');
                     setActualAmount('');
                     setQuoteDate(date);
                   }}
-                  className="moni-field"
-                >
-                  {currencies.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
+                  items={currencies.map((code) => ({
+                    value: code,
+                    label: code,
+                  }))}
+                />
               </div>
             </div>
           </div>
-          <label className="block font-bold">
+          <label htmlFor="entry-date" className="block font-bold">
             {t('entry_date')}
-            <input
+            <Input
+              id="entry-date"
               type="date"
               required
               min="1900-01-01"
@@ -722,9 +749,10 @@ function EntryForm({
               className="moni-field mt-2"
             />
           </label>
-          <label className="block font-bold md:col-span-2">
+          <label htmlFor="entry-name" className="block font-bold md:col-span-2">
             {t('entry_name')}
-            <input
+            <Input
+              id="entry-name"
               ref={nameRef}
               required
               value={name}
@@ -816,9 +844,13 @@ function EntryForm({
                   </Button>
                 </div>
               ) : basis === 'actual' ? (
-                <label className="block font-bold">
+                <label
+                  htmlFor="entry-actual-amount"
+                  className="block font-bold"
+                >
                   {t('fx_settlement')} ({settings.primaryCurrency})
-                  <input
+                  <Input
+                    id="entry-actual-amount"
                     ref={conversionRef}
                     inputMode="decimal"
                     value={actualAmount}
@@ -829,9 +861,13 @@ function EntryForm({
                 </label>
               ) : (
                 <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                  <label className="block min-w-0 font-bold">
+                  <label
+                    htmlFor="entry-rate"
+                    className="block min-w-0 font-bold"
+                  >
                     {t('fx_rate')} ({currency} → {settings.primaryCurrency})
-                    <input
+                    <Input
+                      id="entry-rate"
                       ref={conversionRef}
                       inputMode="decimal"
                       value={rate}
@@ -840,9 +876,13 @@ function EntryForm({
                       aria-invalid={error === 'conversion'}
                     />
                   </label>
-                  <label className="block min-w-0 font-bold">
+                  <label
+                    htmlFor="entry-quote-date"
+                    className="block min-w-0 font-bold"
+                  >
                     {t('fx_quote_date')}
-                    <input
+                    <Input
+                      id="entry-quote-date"
                       type="date"
                       min="1900-01-01"
                       max={date}
@@ -889,25 +929,26 @@ function EntryForm({
             </section>
           )}
           <div className="font-bold">
-            <label htmlFor="entry-category">{t('entry_category')}</label>
-            <select
-              id="entry-category"
+            <p className="mb-2">{t('entry_category')}</p>
+            <Select
+              label={t('entry_category')}
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="moni-field mt-2"
-            >
-              {categories
+              onValueChange={setCategoryId}
+              items={categories
                 .filter((category) => category.kind === kind)
-                .map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {categoryLabel(category.name, category.defaultKey, locale)}
-                  </option>
-                ))}
-            </select>
+                .map((category) => ({
+                  value: category.id,
+                  label: categoryLabel(
+                    category.name,
+                    category.defaultKey,
+                    locale
+                  ),
+                }))}
+            />
           </div>
           <div className="font-bold">
             <label htmlFor="entry-tags">{t('entry_tags')}</label>
-            <input
+            <Input
               id="entry-tags"
               ref={tagsRef}
               value={tags}
@@ -924,12 +965,12 @@ function EntryForm({
           </div>
           <div className="font-bold md:col-span-2">
             <label htmlFor="entry-note">{t('entry_note')}</label>
-            <textarea
+            <Input
+              render={<textarea rows={3} />}
               id="entry-note"
               ref={noteRef}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              rows={2}
               aria-invalid={note.length > 2000}
               aria-describedby="entry-note-hint"
               className="moni-field mt-2 resize-y"
@@ -973,6 +1014,6 @@ function EntryForm({
           </Button>
         </fieldset>
       </form>
-    </>
+    </div>
   );
 }

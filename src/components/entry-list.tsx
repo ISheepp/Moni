@@ -2,12 +2,18 @@ import { Checkbox } from '@base-ui/react/checkbox';
 import { Input } from '@base-ui/react/input';
 import { Popover } from '@base-ui/react/popover';
 import {
+  IconArrowBackUp,
+  IconBriefcase,
   IconCheck,
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconFilter,
+  IconHanger,
+  IconRun,
   IconSearch,
+  IconToolsKitchen2,
+  IconWallet,
 } from '@tabler/icons-react';
 import { Link } from '@tanstack/react-router';
 import { useId, useState } from 'react';
@@ -52,11 +58,39 @@ export function EntryList({
           ? 'query_refund'
           : 'entry_expense'
     );
+  const icon = (entry: Entry) => {
+    const Icon =
+      entry.kind === 'refund'
+        ? IconArrowBackUp
+        : entry.kind === 'income'
+          ? IconBriefcase
+          : entry.categoryKey === 'expense-food'
+            ? IconToolsKitchen2
+            : entry.categoryKey === 'expense-sports'
+              ? IconRun
+              : entry.categoryKey === 'expense-clothing'
+                ? IconHanger
+                : IconWallet;
+    return (
+      <span
+        className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${entry.kind === 'expense' ? 'bg-orange/10' : 'bg-green/20'}`}
+      >
+        <Icon size={21} aria-hidden />
+      </span>
+    );
+  };
+  const kindBadge = (entry: Entry) => (
+    <span
+      className={`inline-flex max-w-full rounded-full px-2.5 py-1 text-xs font-bold ${entry.kind === 'expense' ? 'bg-orange/10' : 'bg-green/20'}`}
+    >
+      {kind(entry)}
+    </span>
+  );
   const tags = (entry: Entry) =>
     entry.tags.map((tag) => (
       <span
         key={tag.id}
-        className="max-w-full break-words rounded-full bg-yellow/25 px-3 py-1 text-sm"
+        className="max-w-full break-words rounded-full bg-yellow/20 px-2.5 py-1 text-xs text-muted-foreground"
       >
         {tag.name}
       </span>
@@ -74,18 +108,24 @@ export function EntryList({
   );
   return (
     <>
-      <EntryFilterForm
-        key={JSON.stringify(filters)}
-        filters={filters}
-        taxonomy={taxonomy}
-        locale={locale}
-        onApply={onApply}
-      />
-      <output className="my-5 block text-sm text-muted-foreground">
+      <section
+        className="rounded-2xl border border-foreground/10 bg-surface p-4 md:px-5 md:pt-5"
+        aria-label={t('query_filters')}
+      >
+        <EntryFilterForm
+          key={JSON.stringify(filters)}
+          filters={filters}
+          taxonomy={taxonomy}
+          locale={locale}
+          onApply={onApply}
+        />
+      </section>
+      <output className="my-5 flex items-center gap-2 text-sm font-bold text-muted-foreground">
+        <span className="size-1.5 rounded-full bg-orange" aria-hidden />
         {t('query_matches')} {data.total}
       </output>
       {!data.items.length ? (
-        <div className="py-8 text-center">
+        <div className="rounded-2xl border border-dashed border-foreground/20 bg-surface/60 px-5 py-10 text-center">
           <img
             alt=""
             src="/moni/illustrations/assistant-search.png"
@@ -104,44 +144,54 @@ export function EntryList({
         </div>
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-2xl border border-foreground/30 bg-surface md:block">
-            <table className="w-full table-fixed text-left">
+          <div className="hidden overflow-x-auto rounded-2xl border border-foreground/10 bg-surface xl:block">
+            <table className="w-full min-w-[980px] table-fixed text-left text-sm">
               <caption className="sr-only">{t('app_entries')}</caption>
-              <thead className="border-b border-muted text-sm text-muted-foreground">
+              <thead className="border-b border-foreground/10 bg-muted/25 text-xs text-muted-foreground">
                 <tr>
-                  <th className="w-28 p-4">{t('entry_date')}</th>
-                  <th className="w-[27%] p-4">{t('entry_name')}</th>
-                  <th className="p-4">{t('query_type')}</th>
-                  <th className="p-4">{t('entry_category')}</th>
-                  <th className="p-4">{t('entry_tags')}</th>
-                  <th className="w-32 p-4 text-right">
+                  <th className="w-28 p-4 font-bold">{t('entry_date')}</th>
+                  <th className="w-[26%] p-4">{t('entry_name')}</th>
+                  <th className="w-24 p-4">{t('query_type')}</th>
+                  <th className="w-24 p-4">{t('entry_category')}</th>
+                  <th className="w-32 p-4">{t('entry_tags')}</th>
+                  <th className="w-36 p-4 text-right">
                     {t('entry_amount')} ({t('query_currency')})
                   </th>
-                  <th className="w-32 p-4 text-right">
+                  <th className="w-36 p-4 text-right">
                     {t('query_equivalent')} ({settings.primaryCurrency})
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-muted">
+              <tbody className="divide-y divide-foreground/10">
                 {data.items.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="p-4 align-top text-sm">{entry.date}</td>
+                  <tr
+                    key={entry.id}
+                    className="transition-colors hover:bg-muted/20"
+                  >
+                    <td className="p-4 align-top text-xs text-muted-foreground tabular-nums">
+                      <time dateTime={entry.date}>{entry.date}</time>
+                    </td>
                     <td className="min-w-0 p-4 align-top">
                       <Link
                         to="/"
                         search={{ view: 'entries', entry: entry.id, filters }}
-                        className="block min-h-11 rounded-lg focus-visible:outline-4 focus-visible:outline-focus"
+                        className="group flex min-h-11 items-start gap-3 rounded-lg outline-none focus-visible:ring-4 focus-visible:ring-focus"
                       >
-                        <h2 className="break-words font-bold">{entry.name}</h2>
-                        {entry.note && (
-                          <p className="mt-2 line-clamp-2 break-words text-sm text-muted-foreground">
-                            {entry.note}
-                          </p>
-                        )}
+                        {icon(entry)}
+                        <div className="min-w-0 flex-1">
+                          <h2 className="break-words font-bold group-hover:underline decoration-orange underline-offset-4">
+                            {entry.name}
+                          </h2>
+                          {entry.note && (
+                            <p className="mt-2 line-clamp-2 break-words text-sm text-muted-foreground">
+                              {entry.note}
+                            </p>
+                          )}
+                        </div>
                       </Link>
                     </td>
                     <td className="break-words p-4 align-top text-sm">
-                      {kind(entry)}
+                      {kindBadge(entry)}
                     </td>
                     <td className="break-words p-4 align-top text-sm">
                       {category(entry)}
@@ -157,7 +207,7 @@ export function EntryList({
                           locale
                         )}
                       </span>
-                    </td>{' '}
+                    </td>
                     <td className="break-words p-4 text-right align-top font-extrabold tabular-nums">
                       {displayMoney(
                         entry.baseMinor,
@@ -170,27 +220,25 @@ export function EntryList({
               </tbody>
             </table>
           </div>
-          <ul className="divide-y divide-muted rounded-2xl border border-foreground/30 bg-surface px-4 md:hidden">
+          <ul className="divide-y divide-foreground/10 rounded-2xl border border-foreground/10 bg-surface px-4 xl:hidden">
             {data.items.map((entry) => (
               <li key={entry.id}>
                 <Link
                   to="/"
                   search={{ view: 'entries', entry: entry.id, filters }}
-                  className="block rounded-lg py-5 focus-visible:outline-4 focus-visible:outline-focus"
+                  className="group block rounded-xl py-5 outline-none hover:bg-muted/20 focus-visible:ring-4 focus-visible:ring-focus"
                 >
-                  <div className="flex flex-wrap items-start gap-3">
+                  <div className="flex items-start gap-3">
+                    {icon(entry)}
                     <div className="min-w-0 flex-1">
-                      <h2 className="break-words text-lg font-bold">
+                      <h2 className="break-words font-bold leading-snug group-hover:underline decoration-orange underline-offset-4">
                         {entry.name}
                       </h2>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {entry.date} · {category(entry)}
+                      <p className="mt-2 text-xs text-muted-foreground tabular-nums">
+                        <time dateTime={entry.date}>{entry.date}</time>
                       </p>
                     </div>
-                    <div className="ml-auto max-w-full text-right">
-                      <span className="text-sm text-muted-foreground">
-                        {kind(entry)}
-                      </span>
+                    <div className="ml-auto min-w-0 max-w-[48%] text-right">
                       <p className="break-words font-extrabold tabular-nums">
                         {displayMoney(
                           entry.originalMinor,
@@ -199,7 +247,7 @@ export function EntryList({
                         )}
                       </p>
                       {entry.currency !== settings.primaryCurrency && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="mt-1 break-words text-xs text-muted-foreground">
                           {t('query_equivalent')}{' '}
                           {displayMoney(
                             entry.baseMinor,
@@ -210,12 +258,23 @@ export function EntryList({
                       )}
                     </div>
                   </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {kindBadge(entry)}
+                    <span className="max-w-full break-words rounded-full bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground">
+                      {category(entry)}
+                    </span>
+                    {tags(entry)}
+                    <IconChevronRight
+                      size={16}
+                      className="ml-auto shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                  </div>
                   {entry.note && (
                     <p className="mt-3 line-clamp-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                       {entry.note}
                     </p>
                   )}
-                  <div className="mt-3 flex flex-wrap gap-2">{tags(entry)}</div>
                 </Link>
               </li>
             ))}
@@ -224,15 +283,18 @@ export function EntryList({
       )}
       <section
         aria-label={t('query_totals')}
-        className="mt-5 rounded-2xl border border-foreground/30 bg-surface p-4 md:p-6"
+        className="mt-5 rounded-2xl border border-foreground/10 bg-surface p-4 md:p-5"
       >
-        <h2 className="font-extrabold">
+        <h2 className="text-sm font-bold text-muted-foreground">
           {t('query_totals')} · {data.primaryCurrency}
         </h2>
-        <dl className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {(['income', 'expense', 'refund', 'netExpense'] as const).map(
             (key) => (
-              <div key={key}>
+              <div
+                key={key}
+                className={`min-w-0 rounded-xl p-3 ${key === 'netExpense' ? 'bg-orange/10' : 'bg-muted/25'}`}
+              >
                 <dt className="text-sm text-muted-foreground">
                   {t(
                     key === 'income'
@@ -244,7 +306,7 @@ export function EntryList({
                           : 'query_net_expense'
                   )}
                 </dt>
-                <dd className="mt-2 break-words text-lg font-extrabold tabular-nums">
+                <dd className="mt-2 break-words text-lg font-extrabold tracking-tight tabular-nums">
                   {displayMoney(data.totals[key], data.primaryCurrency, locale)}
                 </dd>
               </div>

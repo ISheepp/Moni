@@ -29,9 +29,12 @@ test('manual entries preserve notes, edit actual records, lock currency and retr
   await page.getByLabel('Name', { exact: true }).fill('Synthetic lunch');
   await page.getByLabel('Amount', { exact: true }).fill('35.001');
   await page.getByLabel('Date', { exact: true }).fill('2026-10-18');
-  await page
-    .getByLabel('Category', { exact: true })
-    .selectOption('expense-food');
+  await page.getByRole('combobox', { name: 'Category', exact: true }).click();
+  await page.getByRole('option', { name: 'Food', exact: true }).click();
+  await page.getByRole('button', { name: 'Expense', exact: true }).click();
+  await expect(
+    page.getByRole('combobox', { name: 'Category', exact: true })
+  ).toContainText('Food');
   await page.getByLabel('Tags', { exact: true }).fill('lunch, takeout');
   await page
     .getByLabel('Note', { exact: true })
@@ -107,7 +110,8 @@ test('manual entries preserve notes, edit actual records, lock currency and retr
   await page.getByRole('button', { name: '收入', exact: true }).click();
   await page.getByLabel('金额', { exact: true }).fill('9000');
   await page.getByLabel('名称', { exact: true }).fill('Synthetic salary');
-  await page.getByLabel('类目', { exact: true }).selectOption('income-salary');
+  await page.getByRole('combobox', { name: '类目', exact: true }).click();
+  await page.getByRole('option', { name: '工资', exact: true }).click();
   await page.getByRole('button', { name: '保存账目', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Synthetic salary', exact: true })

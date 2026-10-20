@@ -557,5 +557,7 @@
   "report_loading": "Loading reports…",
   "report_year": "Year",
   "report_previous_year": "Previous year",
-  "report_next_year": "Next year"
+  "report_next_year": "Next year",
+  "entry_overview": "Find, review and manage your income and spending.",
+  "entry_loading": "Loading entries…"
 }
