@@ -8,7 +8,8 @@
 <h1 align="center">Bookkeeping, in your own words.</h1>
 
 <p align="center">
-  An open-source personal ledger, self-hosted entirely on Cloudflare.<br>
+  An open-source personal ledger. Chat in the web app or WeChat via ClawBot.<br>
+  Self-hosted entirely on Cloudflare.<br>
   <strong>$0 hosting within Cloudflare's free-tier limits. You pay for AI tokens.</strong>
 </p>
 
@@ -29,6 +30,25 @@ Moni turns your message into separate entries, suggests categories and tags, and
 Review and edit the draft, then confirm. If you prefer, explicitly enable **automatic posting** in Settings. Missing amounts or unclear currencies still need your input.
 
 ![Desktop draft preview with two expenses, categories, tags, notes, and original-currency amounts](docs/verification/screenshots/s4-drafts-pc.png)
+
+## Record and query from WeChat with ClawBot
+
+**Use Moni inside WeChat.** Deploy it once, add your AI configuration, then open **Settings → WeChat** and scan the QR code to connect ClawBot.
+
+Send a message as you normally would:
+
+> Lunch at KFC: CNY 35.
+>
+> How much did I spend on takeout over the last three months?
+>
+> What about last month? Show me the transactions.
+
+- Record expenses and income, with categories, tags, and notes.
+- Keep asking follow-up questions in the same WeChat conversation.
+- Review a draft and confirm with a natural reply. You can also review pending drafts together and confirm the reviewed batch in WeChat.
+- Use the same ledger and posting permissions as the web app; entries are available from both.
+
+The WeChat receiver runs on Cloudflare too. You do not need to leave a computer or a separate bridge server running. Connection details are in the [WeChat guide](docs/wechat-integration.md).
 
 ## Ask your ledger questions
 
