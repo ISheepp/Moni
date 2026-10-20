@@ -5,6 +5,7 @@
   "compatibility_date": "2026-08-11",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "preview_urls": false,
   "d1_databases": [
     {
       "binding": "DB",
@@ -30,6 +31,7 @@
     "preview": {
       "name": "moni-preview",
       "workers_dev": true,
+      "preview_urls": false,
       "d1_databases": [
         {
           "binding": "DB",

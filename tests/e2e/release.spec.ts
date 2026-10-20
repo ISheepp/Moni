@@ -96,7 +96,7 @@ test('separate Worker instances isolate equal ledger, conversation and run IDs a
     ...new Set(
       (await readFile('src/worker.ts', 'utf8')).match(/\/api\/[a-z/-]+/g)
     ),
-  ];
+  ].filter((path) => !path.startsWith('/api/auth/'));
   expect(apiPaths.length).toBeGreaterThan(25);
   for (const [index, fixture] of fixtures.entries()) {
     const label = labels[index];
@@ -282,7 +282,9 @@ test('an unauthenticated browser receives only the bilingual restricted view, pu
     path: `docs/verification/screenshots/s6-restricted-${isMobile ? 'mobile' : 'pc'}.png`,
   });
   await page.getByText('查看配置说明', { exact: true }).click();
-  await expect(page.getByText(/无需在网页输入密钥或认领账本/)).toBeVisible();
+  await expect(
+    page.getByText(/已有 Access 配置不会自动回退到密码模式/)
+  ).toBeVisible();
   await expect(page.locator('input')).toHaveCount(0);
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('img.dark')).toBeVisible();

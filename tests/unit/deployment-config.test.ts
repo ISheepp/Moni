@@ -14,9 +14,13 @@ import { expect, it } from 'vitest';
 
 const scripts = JSON.parse(await readFile('package.json', 'utf8')).scripts;
 
-it('does not ask deploy-button users for any secrets and keeps the local template blank', async () => {
-  for (const filename of ['.dev.vars.example', '.env.example'])
-    await expect(readFile(filename)).rejects.toMatchObject({ code: 'ENOENT' });
+it('asks deploy-button users only for the optional ledger password and keeps every example blank', async () => {
+  await expect(readFile('.dev.vars.example')).rejects.toMatchObject({
+    code: 'ENOENT',
+  });
+  expect(parseEnv(await readFile('.env.example', 'utf8'))).toEqual({
+    MONI_PASSWORD: '',
+  });
   const template = parseEnv(
     await readFile('config/local.vars.example', 'utf8')
   );
@@ -53,6 +57,7 @@ if (args.join(' ') === 'secret list') process.stdout.write(JSON.stringify([{name
         ACCESS_ISSUER: '',
         ACCESS_AUDIENCE: '',
         OWNER_SUBJECT: '',
+        MONI_PASSWORD: '',
         WECHAT_SECRET: '',
         CONFIG_ENCRYPTION_KEY: '',
         PATH: directory,

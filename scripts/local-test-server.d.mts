@@ -10,6 +10,7 @@ export function startTestServer(
       ACCESS_ISSUER?: string;
       ACCESS_AUDIENCE?: string;
       OWNER_SUBJECT?: string;
+      MONI_PASSWORD?: string;
     };
   }
 ): Promise<{
