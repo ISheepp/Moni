@@ -1,6 +1,6 @@
 # Moni v0.1 部署指南
 
-2026-10-19 更新。首次按钮部署、远端迁移、本人 Access、自定义域名与重复发布已实际验证；部署后网页配置 AI 与微信的追加需求见[网页配置设计](web-configuration.md)。验证层次见[部署记录](verification/deployment-readiness.md)。微信作为单独批准的可选扩展已提供本地接入实现，配置与待验收事项见[微信接入说明](wechat-integration.md)，不改动原 v0.1 的 19 项验收基线。
+2026-10-20 更新。新增默认账本密码和可选 Cloudflare Access；两种方式的规则见[访问控制](authentication.md)。首次按钮部署、远端迁移、本人 Access、自定义域名与重复发布已实际验证；部署后网页配置 AI 与微信的追加需求见[网页配置设计](web-configuration.md)。验证层次见[部署记录](verification/deployment-readiness.md)。微信作为单独批准的可选扩展已提供本地接入实现，配置与待验收事项见[微信接入说明](wechat-integration.md)，不改动原 v0.1 的 19 项验收基线。
 
 ## 一键入口与默认资源
 
@@ -10,24 +10,27 @@ Worker 默认名 `moni`，保留 `workers.dev`。`DB` 绑定 D1；`CONVERSATIONS
 
 构建为 `pnpm run build`，部署为 `pnpm run deploy`：Workers Builds 只构建一次，部署阶段按 **binding 名 DB** 运行远端迁移，再发布生成的 Worker，然后运行 `bootstrap-deployment-secrets.mjs` 准备加密密钥。脚本仅创建缺少的 `CONFIG_ENCRYPTION_KEY`／`WECHAT_SECRET`，已有值不读取、不替换、不输出。迁移失败即停止发布，不删除库或初始化已有账本。本机需要连同构建一起发布时使用 `pnpm deploy:local`；单独运行 `pnpm deploy` 要求已有当前目标的构建产物。依据：[官方部署按钮](https://developers.cloudflare.com/workers/platform/deploy-buttons/)。
 
-初次部署不要求 AI、微信或 Access Secret。官方按钮会自动读取仓库根目录 `.dev.vars.example`／`.env.example` 生成 Secret 输入，因此本项目将空白本地示例放在 `config/local.vars.example`，并让类型生成和 dry-run 显式读取该文件。`package.json` 中的绑定描述只说明用途，不携带个人配置。Access 在部署后的引导阶段完成；AI 和微信可跳过。
+新部署默认只需设置一个账本密码 `MONI_PASSWORD`（15–128 个字符），无需 AI、微信或三项 Access Secret。官方按钮读取根目录 `.env.example`，其中仅包含空白 `MONI_PASSWORD`；真实值由部署者在表单或 Worker Secrets 中填写，不写入仓库。其他空白本地示例仍在 `config/local.vars.example`，类型生成和 dry-run 显式使用它。选择 Access 的部署可以跳过密码，随后按下文配置 Access。
 
 ## 首次部署次序
 
 1. 审查并发布代码到自己的仓库，确认公开材料没有私密文件。按钮使用该仓库，核对资源名称和命令。
 2. 完成构建、资源、迁移、部署并分别记录结果。打开默认地址：身份未配置时，首页返回双语首次使用引导。它只检查账本数据库基本就绪和会话 binding 是否存在，不读取或显示私人账目，也不会调用 AI／微信。存储准备完成时首页为 HTTP 200，空库／迁移未完成／缺 binding 时为 HTTP 503，并说明修复步骤；业务接口始终拒绝未配置身份的请求。
-3. 启用 Zero Trust，进入该 Worker 的 **Access**，选 **All traffic**。策略仅允许明确的本人身份；不要用整个邮箱域、所有账号成员或 Everyone 代替本人规则。必要时在 Zero Trust 应用中编辑为具体本人邮箱／身份提供者规则。
-4. 将下表 Access 三项设为 Worker Secrets。`OWNER_SUBJECT` 取本人的 Zero Trust 用户 ID／已核实应用 token 的 `sub`；不把完整 JWT 发到聊天、公共解码站、文档或命令参数。无网页认领 owner 入口。
+3. 默认密码方式：在部署表单设置 `MONI_PASSWORD`。若当时跳过，进入 **Workers & Pages → 此 Worker → Settings → Variables and Secrets → Add → Secret**，填写密码并 Deploy。密码长度 15–128，不能全为空白；内部加密主密钥由部署脚本自动准备。
+4. 可选 Access 方式：启用 Zero Trust，在 Worker 的 **Access** 选 **All traffic**，仅允许明确的本人邮箱／身份；将下表三项设为 Worker Secrets。`OWNER_SUBJECT` 取本人的 Zero Trust 用户 ID／已核实应用 token 的 `sub`。不上传完整 JWT、不以第一个访问者认领 owner。任何一项 Access 配置存在时，应用都会选择 Access；配置不完整或验证失败不会退回密码登录。
 5. 本人登录后选主币、时区并初始化；正式账目出现后主币锁定，时区修改不改历史发生日。
 6. 如需 AI，在“设置 → AI 助手”填写 API Key、Base URL、模型；可测试连接后保存。测试只请求简短合成文本，不保存配置、不读写账目，也不替代工具能力验收。微信在“设置 → 微信入口”扫码即可；可先绑定，再配 AI。两项均可跳过。
 7. 用合成账目跑完线上验收，再录入私人数据。公开截图／日志只使用合成内容。
 
-Worker 级 All traffic 保护同 Worker 的生产、预览及其他域名。应用仍校验 RS256 签名、issuer／AUD／有效期／应用 token／非空 subject 与唯一 owner。当前聊天为 HTTP SSE，不需要 WebSocket。依据：[Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)。
+密码会话使用 30 天、HttpOnly／Secure／SameSite=Strict、无 Domain 的 Cookie；退出撤销当前会话，更新密码使旧凭证失效。密码方式支持本 Worker 的自定义和默认域名，各域名需要分别登录。登录按客户端限流，每 15 分钟最多 5 次尝试。
 
-首页引导不接受配置写入、密钥或 owner 认领。配置齐全后，未登录与非本人继续返回访问受限页面，不会因为存在引导而跳过 Access。主币／时区在本人验证后的既有初始化页面设置；AI Key 仅在本人验证后的设置页提交，保存后不回传；公开引导不接受 Key。
+选择 Access 时，Worker 级 All traffic 保护同 Worker 的生产、预览及其他域名。应用仍校验 RS256 签名、issuer／AUD／有效期／应用 token／非空 subject 与唯一 owner。当前聊天为 HTTP SSE，不需要 WebSocket。依据：[Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)。
+
+首页引导不接受配置写入、密钥或 owner 认领。配置齐全后，未登录与非本人继续返回访问受限页面，不会因为存在引导而跳过认证。主币／时区在本人验证后的既有初始化页面设置；AI Key 仅在本人验证后的设置页提交，保存后不回传；公开引导不接受 Key。
 
 | Secret | 内容与边界 |
 | --- | --- |
+| `MONI_PASSWORD` | 默认密码登录使用，15–128 个字符；仅以 Worker Secret 保存。已配置 Access 时不用于登录 |
 | `ACCESS_ISSUER` | 自己的 Access 团队 HTTPS origin，无路径／查询 |
 | `ACCESS_AUDIENCE` | 保护该 Worker 的应用 AUD |
 | `OWNER_SUBJECT` | 同 issuer 下唯一本人 sub；重建组织／删除重加用户后重新核实 |
@@ -37,7 +40,13 @@ Worker 级 All traffic 保护同 Worker 的生产、预览及其他域名。应�
 | `AI_BASE_URL` | 可选兼容服务 HTTPS base URL，按供应商保留 API 路径；无账号密码、查询或片段 |
 | `AI_MODEL` | 可选实际模型 ID，与其他 AI 配置一起设置 |
 
-可用控制台 Secrets 或以下交互命令，不在命令行传值：
+可用控制台 Secrets，密码方式只需设置 `MONI_PASSWORD`。也可使用以下交互命令；不在命令行传值：
+
+```bash
+pnpm exec wrangler secret put MONI_PASSWORD
+```
+
+选择 Access 时配置：
 
 ```bash
 pnpm exec wrangler secret put ACCESS_ISSUER
@@ -53,7 +62,7 @@ AI 配置默认通过网页管理，无需返回控制台填写。旧环境变�
 
 ## 生产与预览隔离
 
-此处 preview 为独立命名 Worker **`moni-preview`**，D1 默认名 **`moni-preview`**，DO 没有 `script_name`，属于独立 Worker namespace。单独配置 Access 应用／AUD、owner 及可选 AI Secrets；不能复制生产 D1 ID 或指向生产 DO script。
+此处 preview 为独立命名 Worker **`moni-preview`**，D1 默认名 **`moni-preview`**，DO 没有 `script_name`，属于独立 Worker namespace。独立设置密码及加密密钥，或配置独立的 Access 应用／AUD 和 owner；不能复制生产 D1 ID、会话凭证或指向生产 DO script。两个环境默认 `preview_urls: false`，防止历史版本保留旧访问配置；独立预览 Worker 的 `workers.dev` 地址仍可用。
 
 ```bash
 pnpm deploy:preview
@@ -75,7 +84,7 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-本地页面仍要求同一 Access 校验。自动化通过临时测试身份运行真实本地 D1／DO，模型、报价和时间可控，不读取开发私密配置。
+本地页面同样必须认证：可在忽略的 `.dev.vars` 设置 `MONI_PASSWORD`、随机 64 位十六进制 `CONFIG_ENCRYPTION_KEY` 并留空 Access 三项，也可使用真实 Access。自动化通过合成密码或临时测试身份运行真实本地 D1／DO，模型、报价和时间可控，不读取开发私密配置。
 
 本地迁移只写 `.wrangler/`。远端由部署流程执行 `wrangler d1 migrations apply DB --remote`；会改变所选数据库，须先核对目标并备份。失败只回滚当前迁移，之前成功的可能保留；不要删除库或清空 migrations 表重跑，排错后继续未完成迁移。依据：[D1 migrations apply](https://developers.cloudflare.com/workers/wrangler/commands/d1/#d1-migrations-apply)。
 
@@ -124,3 +133,9 @@ MONI_REAL_FX_SMOKE=1 node scripts/real-fx-smoke.mjs
 - 记录实际版本、迁移、服务、浏览器及隐私证据后关闭 #20；父规格无单独指令不改写／关闭。
 
 代码回滚不会自动回滚 D1 及已应用迁移。升级前私密保存业务 JSON 及必要 D1 管理备份，先在独立 preview 验证。日志仅固定状态码／错误分类，不输出 Key、JWT、私人输入、完整备注或原始供应商错误。
+
+## 修改密码与登录方式
+
+在此 Worker 的 Variables and Secrets 中更新 `MONI_PASSWORD` 并 Deploy，即可修改／重置密码；无需改账目、服务配置或业务备份。所有旧会话在新密码配置下失效，下一次成功登录也清理旧密码对应的会话。勿删除或重建 D1、`CONFIG_ENCRYPTION_KEY`、`WECHAT_SECRET`。
+
+从密码改为 Access，配置仅本人的 All traffic 与 Access 三项即可。现有 Access 实例升级时保持原方式，不要求额外密码。主动切换回密码时，先准备密码，再删除三项 Access Secret；如果已开启 Cloudflare 外层 Access，也需由部署者按预期调整该规则。不要只删除其中一项，否则应用会保持拒绝。

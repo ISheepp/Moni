@@ -1,5 +1,7 @@
 import server from '@tanstack/react-start/server-entry';
-import { AccessError, verifyAccess } from './lib/access';
+import { AccessError } from './lib/access';
+import { authenticationMode, verifyOwner } from './lib/auth';
+import { loginLocation, safeReturnTo } from './lib/auth-navigation';
 import { privateResponse } from './lib/http';
 import { deploymentSetupPage, restrictedPage } from './lib/restricted-page';
 import { handlePrivateApi } from './worker';
@@ -28,14 +30,44 @@ export default {
       path === '/manifest.webmanifest'
     )
       return server.fetch(request);
+    const login = path === '/login';
     try {
-      await verifyAccess(request, env);
+      await verifyOwner(request, env);
+      if (login)
+        return privateResponse(
+          new Response(null, {
+            status: 303,
+            headers: {
+              Location: safeReturnTo(
+                new URL(request.url).searchParams.get('returnTo')
+              ),
+            },
+          })
+        );
       return privateResponse(await server.fetch(request));
     } catch (error) {
+      if (error instanceof AccessError && error.code === 'login_required') {
+        if (login && (request.method === 'GET' || request.method === 'HEAD'))
+          return privateResponse(await server.fetch(request));
+        if (request.method === 'GET' || request.method === 'HEAD')
+          return privateResponse(
+            new Response(null, {
+              status: 303,
+              headers: {
+                Location: loginLocation(path + new URL(request.url).search),
+              },
+            })
+          );
+      }
+      if (login && authenticationMode(env) === 'access')
+        return restrictedPage(
+          request,
+          error instanceof AccessError ? error.status : 503
+        );
       if (
         error instanceof AccessError &&
         error.code === 'access_not_configured' &&
-        (path === '/' || path === '/zh') &&
+        (path === '/' || path === '/zh' || login) &&
         (request.method === 'GET' || request.method === 'HEAD')
       )
         return deploymentSetupPage(request, env);

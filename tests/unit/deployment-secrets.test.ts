@@ -11,6 +11,7 @@ const blank = {
   ACCESS_ISSUER: '',
   ACCESS_AUDIENCE: '',
   OWNER_SUBJECT: '',
+  MONI_PASSWORD: '',
   CONFIG_ENCRYPTION_KEY: '',
   WECHAT_SECRET: '',
 };

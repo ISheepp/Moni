@@ -4,22 +4,24 @@ import { MoniApp } from '@/components/moni-app';
 import { reportOptions } from '@/components/report-workspace';
 import { entryFilters } from '@/ledger/entry-query';
 
+export const appSearch = z.object({
+  view: z.enum(['chat', 'entries', 'reports', 'settings']).catch('chat'),
+  entry: z
+    .union([z.literal('new'), z.uuid()])
+    .optional()
+    .catch(undefined),
+  thread: z.uuid().optional().catch(undefined),
+  edit: z.boolean().optional().catch(undefined),
+  panel: z
+    .enum(['taxonomy', 'trash', 'conversations', 'backup'])
+    .optional()
+    .catch(undefined),
+  filters: entryFilters.optional().catch(undefined),
+  report: reportOptions.optional().catch(undefined),
+});
+
 export const Route = createFileRoute('/')({
-  validateSearch: z.object({
-    view: z.enum(['chat', 'entries', 'reports', 'settings']).catch('chat'),
-    entry: z
-      .union([z.literal('new'), z.uuid()])
-      .optional()
-      .catch(undefined),
-    thread: z.uuid().optional().catch(undefined),
-    edit: z.boolean().optional().catch(undefined),
-    panel: z
-      .enum(['taxonomy', 'trash', 'conversations', 'backup'])
-      .optional()
-      .catch(undefined),
-    filters: entryFilters.optional().catch(undefined),
-    report: reportOptions.optional().catch(undefined),
-  }),
+  validateSearch: appSearch,
   head: () => ({
     meta: [{ title: 'Moni' }, { name: 'robots', content: 'noindex, nofollow' }],
   }),

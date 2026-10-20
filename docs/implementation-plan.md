@@ -1,5 +1,6 @@
 # Moni v0.1 分阶段实现计划
 
+2026-10-20 追加：默认账本密码与可选 Cloudflare Access 已获批准，后续访问控制以[访问控制设计](authentication.md)为准；下文 S1／A17 的 Access 验收继续适用于 Access 模式，密码模式补充等价入口保护、会话撤销及限流验收。
 日期：2026-10-18。依据：[需求基线](../PRODUCT.md)、[技术方案](technical-design.md)、[平台核查](research/2026-10-18-platform-feasibility.md)与[官方 skill 复核](research/2026-10-18-tanstack-official-skills.md)。
 
 架构已确定为 D1 + DO：D1 保存账本、草稿、完整会话与运行记录，每个会话一个 DO 协调并执行 AI 回合。先验证两者协同、关键适配和数据原子性，再完成手动记账与确定性统计，然后接入 AI、会话和备份恢复，最后验证一键部署。每阶段都应交付可检查的行为；全部完成并通过 19 项需求验收后，才满足 v0.1。

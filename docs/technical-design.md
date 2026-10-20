@@ -29,7 +29,7 @@
 
 ```mermaid
 flowchart TD
-  UI[手机或桌面网页] --> Access[Cloudflare Access]
+  UI[手机或桌面网页] --> Access[账本密码／可选 Cloudflare Access]
   Access --> Guard[Worker 身份校验]
   Guard --> Ledger[账目与统计 Module]
   Guard --> Chat[会话 DO + TanStack AI]
@@ -57,7 +57,7 @@ DO 以部署环境、可信 owner、`dataset_id` 和会话 ID 确定身份，同
 
 | Module | 建议位置 | Interface 承担的职责 |
 | --- | --- | --- |
-| 身份 | `src/server/access.ts` | 验证请求身份，提供服务端可信的 owner、活动数据集和访问范围。 |
+| 身份 | `src/lib/auth.ts`／`src/lib/access.ts` | 验证请求身份，提供服务端可信的 owner、活动数据集和访问范围。 |
 | 金额与日期 | `src/ledger/` | 金额精度、换算、退款尾差、相对日期与月度区间，保持可独立验证。 |
 | 账目 | `src/server/ledger.ts` | 准备与确认草稿、修改、退款、删除恢复、分类维护、筛选和统计；统一不变量与 D1 写入。 |
 | 汇率 | `src/server/currency.ts` | 获取并校验报价，返回来源、实际报价日期和换算方向；手填和实际结算使用同一金额规则。 |
@@ -69,15 +69,17 @@ DO 以部署环境、可信 owner、`dataset_id` 和会话 ID 确定身份，同
 
 ## 4 身份与数据保护
 
-### 4.1 两层访问检查
+### 4.1 单人认证与访问检查
 
-优先配置 Worker 级 Access，覆盖正式域名、`workers.dev` 与预览入口。Worker 侧仍验证 Access JWT 的签名、可信签发者、目标 audience、有效期和唯一 owner 身份；不能直接相信客户端提供的邮箱头或会话 ID。[官方依据](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
+2026-10-20 追加决定：默认使用单人账本密码，Cloudflare Access 为可选方式。SSR、API、流、导出和恢复共用 `verifyOwner`；已有任意 Access 配置时继续选择 Access，不在验证失败后回退。密码会话和限流存于独立 D1 表，不进入业务备份；详细配置与边界见[访问控制](authentication.md)。
+
+选择 Access 时配置 Worker 级 All traffic，覆盖正式域名、`workers.dev` 与预览入口。Worker 侧仍验证 Access JWT 的签名、可信签发者、目标 audience、有效期和唯一 owner 身份；不能直接相信客户端提供的邮箱头或会话 ID。[官方依据](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
 
 签名校验采用 JOSE 标准库并使用官方公钥集合，同时检查适用的 nbf 与 token 类型，仅接受已绑定的本人应用访问令牌，拒绝空 subject 与 service token。owner 以可信签发者与 subject 组合识别；Access team、audience 和允许的 owner 由部署侧配置，首次初始化也必须在身份检查之后，不能通过第一个访问者自动认领账本。
 
 全局请求检查覆盖 SSR、server functions、普通接口、聊天流、导出与恢复。各 Module 的 Interface 再接收可信上下文，避免只保护 `/api/` 而漏掉其他服务端入口。未配置鉴权时默认拒绝业务访问。
 
-DO 仅通过服务端 binding 调用，不另设可绕过 Access 的公开入口。DO 名称及内部身份上下文由已鉴权 Worker 构造；DO 执行前再检查 D1 中的会话归属、活动数据集和删除状态，不信任客户端自行指定 owner 或对象地址。
+DO 仅通过服务端 binding 调用，不另设可绕过应用认证的公开入口。DO 名称及内部身份上下文由已鉴权 Worker 构造；DO 执行前再检查 D1 中的会话归属、活动数据集和删除状态，不信任客户端自行指定 owner 或对象地址。
 
 生产请求不提供“缺少 Access 就使用测试用户”的回退。测试通过受控身份替身验证正常行为，同时验证生产入口无法选择该替身。
 
@@ -285,11 +287,11 @@ CSV 由同一账目查询生成，明确备注、原币与折合金额列、退�
 
 ## 11 配置与一键部署
 
-部署配置分为 D1 binding、会话 DO namespace/class binding、Access team/audience/唯一 owner、主币种与时区、AI 地址/模型，以及独立 Secrets。Worker 入口保留 TanStack Start 的请求处理并导出 DO 类；DO 类迁移使用 Wrangler 的 `new_sqlite_classes` 配置，与 D1 SQL migrations 分开管理。具体入口及流转发方式先经 S0 验证，实施配置变化后再生成 Worker 类型。[DO 配置说明](https://developers.cloudflare.com/durable-objects/get-started/)
+部署配置分为 D1 binding、会话 DO namespace/class binding、账本密码或 Access team/audience/唯一 owner、主币种与时区、AI 地址/模型，以及独立 Secrets。Worker 入口保留 TanStack Start 的请求处理并导出 DO 类；DO 类迁移使用 Wrangler 的 `new_sqlite_classes` 配置，与 D1 SQL migrations 分开管理。具体入口及流转发方式先经 S0 验证，实施配置变化后再生成 Worker 类型。[DO 配置说明](https://developers.cloudflare.com/durable-objects/get-started/)
 
 使用 Cloudflare 官方部署按钮创建 D1 并配置会话 DO；官方自动资源配置清单包含两者。部署流程按 D1 binding 名执行 SQL 迁移，DO 类迁移随 Worker 部署验证；实例资源标识由部署流程生成，不把个人信息写入基础仓库。正式与预览的 D1 和 DO namespace 分别隔离。[部署按钮官方说明](https://developers.cloudflare.com/workers/platform/deploy-buttons/#automatic-resource-provisioning)
 
-Zero Trust 开通、Access 本人策略和用户自己的 AI Key 仍需部署者配置。首次指引给出具体步骤与配置状态，不能用“按钮已部署”替代真实访问保护验证；公开指引只包含无敏感信息的说明，初始化接口依旧受保护。
+默认只需部署者设置账本密码；选择 Access 时才需开通 Zero Trust、配置本人策略。AI Key 在登录后的设置页配置。首次指引给出具体步骤与配置状态，不能用“按钮已部署”替代真实访问保护验证；公开指引只包含无敏感信息的说明，初始化接口依旧受保护。
 
 ## 12 实施前验证与风险
 

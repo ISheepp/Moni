@@ -16,6 +16,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { z } from 'zod';
 import { AiSettings } from '@/components/ai-settings';
 import { AppLanguageSwitcher } from '@/components/app-language-switcher';
+import { AuthenticationSettings } from '@/components/authentication-settings';
 import { BackupWorkspace } from '@/components/backup-workspace';
 import { ChatWorkspace } from '@/components/chat-workspace';
 import { ConversationList } from '@/components/conversation-list';
@@ -253,6 +254,7 @@ export function MoniApp({
                 onSaved={refresh}
               />
               <AiSettings locale={locale} onSaved={refresh} />
+              <AuthenticationSettings locale={locale} />
               <WechatSettings
                 datasetId={settings.datasetId}
                 locale={locale}

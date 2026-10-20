@@ -11,6 +11,8 @@ export async function deploymentSetupPage(request: Request, env: Env) {
         JOIN datasets d ON d.id = s.active_dataset
         JOIN posting_policy p ON p.singleton = 1
         LEFT JOIN service_configuration c ON c.name = 'ai'
+        LEFT JOIN auth_sessions a ON 1 = 0
+        LEFT JOIN auth_login_limits l ON 1 = 0
         WHERE s.singleton = 1 LIMIT 1`).first()
     );
   } catch {
@@ -29,6 +31,7 @@ export function restrictedPage(
 ) {
   const zh =
     new URL(request.url).pathname === '/zh' ||
+    new URL(request.url).searchParams.get('lang') === 'zh' ||
     request.headers.get('Accept-Language')?.toLowerCase().startsWith('zh');
   const incomplete = status === 503;
   const ready = deployment?.database && deployment.conversations;
@@ -53,8 +56,8 @@ export function restrictedPage(
       : 'Moni is running. Protect access for yourself, then create your private ledger.'
     : incomplete
       ? zh
-        ? '账本暂时不可用。请由部署者检查 Cloudflare Access 与本人身份配置，然后重新验证。'
-        : 'The ledger is temporarily unavailable. Ask the deployer to check Cloudflare Access and owner configuration, then verify again.'
+        ? '账本暂时不可用。请由部署者检查账本密码或 Cloudflare Access 配置，然后重新验证。'
+        : 'The ledger is temporarily unavailable. Ask the deployer to check the ledger password or Cloudflare Access configuration, then verify again.'
       : zh
         ? '暂时无法验证你的访问权限。请使用已获授权的身份登录，或检查部署的访问配置。'
         : 'Your access could not be verified. Sign in with your authorized identity, or check the deployment access settings.';
@@ -64,14 +67,14 @@ export function restrictedPage(
     <li>${zh ? '账本存储：' : 'Ledger storage: '}${deployment.database ? (zh ? '已就绪' : 'ready') : zh ? '需要完成数据库绑定与迁移' : 'complete the database binding and migrations'}</li>
     <li>${zh ? '会话存储：' : 'Conversation storage: '}${deployment.conversations ? (zh ? '已绑定' : 'bound') : zh ? '需要完成会话存储绑定' : 'complete the conversation storage binding'}</li></ul></section>
     <section aria-labelledby="next-steps"><h2 id="next-steps">${zh ? '接下来，保护你的账本' : 'Next, protect your ledger'}</h2>
-    <ol><li>${zh ? '在 Cloudflare 控制台打开此应用的 Access，选择 All traffic，仅允许你本人的邮箱或身份。' : 'In the Cloudflare dashboard, open Access for this Worker, choose All traffic and allow only your own email or identity.'}</li>
-    <li>${zh ? '按照部署指南，在 Cloudflare Secrets 中完成 Access 与本人身份绑定。' : 'Follow the deployment guide to configure Access and bind your owner identity using Cloudflare Secrets.'}</li>
+    <ol><li>${zh ? '推荐使用账本密码：在此 Worker 的 Settings → Variables and Secrets 添加 MONI_PASSWORD，类型选 Secret，设置 15–128 个字符的密码并发布。部署表单中已填写的密码会直接生效。' : 'Recommended: set a ledger password. In this Worker’s Settings → Variables and Secrets, add MONI_PASSWORD as a Secret, choose 15–128 characters, and deploy. A password entered in the deploy form is already configured.'}</li>
+    <li>${zh ? '也可以选择 Cloudflare Access：启用 All traffic，仅允许本人，再按部署指南配置团队域名、应用 AUD 和本人用户 ID。已有 Access 配置会优先使用。' : 'Alternatively, enable Cloudflare Access for All traffic, allow only yourself, and follow the deployment guide to configure your team domain, application AUD and owner user ID. Existing Access settings take priority.'}</li>
     <li>${zh ? '重新验证访问，登录后选择主币种与时区，即可开始手动记账。' : 'Verify access again, sign in, then choose your primary currency and time zone to start manual bookkeeping.'}</li></ol></section>
     <div class="notice"><strong>${zh ? 'AI 和微信可以稍后配置' : 'AI and WeChat can wait'}</strong><p>${zh ? '无需模型 Key 或微信连接，即可完成部署。本人验证后可在设置中填写 AI 配置或扫码连接微信，也可先手动记账。' : 'Deployment needs no model key or WeChat connection. After owner verification, configure AI or scan to connect WeChat in Settings, or start with manual entries.'}</p></div>
     <p>${zh ? '此页仅提供状态与说明，不接受密钥，也不提供账本认领入口。' : 'This page provides status and instructions only. It accepts no keys and cannot assign ledger ownership.'}</p>
     <a href="https://github.com/ISheepp/Moni/blob/main/docs/deployment.md" rel="noreferrer">${zh ? '查看部署指南' : 'Read deployment guide'}</a>`
     : `<div class="notice"><strong>${incomplete ? (zh ? '必要配置未完成' : 'Required setup is incomplete') : zh ? '访问验证未完成' : 'Access verification is incomplete'}</strong><p>${zh ? '为保护你的数据安全，请完成访问验证后再使用。' : 'Complete access verification before using your private ledger.'}</p></div>
-    <details><summary>${zh ? '查看配置说明' : 'View setup guidance'}</summary><p>${zh ? '请由部署者在 Cloudflare 控制台完成仅允许本人的 Access 策略和身份配置。无需在网页输入密钥或认领账本；完成后重新验证访问。' : 'The deployer must configure Cloudflare Access for the owner only and bind that identity. No keys or ledger ownership are entered here. Verify access again after setup.'}</p></details>`;
+    <details><summary>${zh ? '查看配置说明' : 'View setup guidance'}</summary><p>${zh ? '部署者可在 Cloudflare 中设置账本密码，或配置仅允许本人的 Access。已有 Access 配置不会自动回退到密码模式；完成后重新验证访问。' : 'The deployer can set a ledger password in Cloudflare or configure owner-only Access. Existing Access settings never silently fall back to password login. Verify access again after setup.'}</p></details>`;
   const html = `<!doctype html><html lang="${zh ? 'zh-CN' : 'en'}"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow"><title>${title} · Moni</title>

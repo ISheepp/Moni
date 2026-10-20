@@ -7,6 +7,8 @@ AI_MODEL=""
 ACCESS_ISSUER=""
 ACCESS_AUDIENCE=""
 OWNER_SUBJECT=""
+# Default when no Access configuration is set. Use 15–128 characters.
+MONI_PASSWORD=""
 # Generated automatically on cloud deploy; encrypts web-configured model credentials.
 CONFIG_ENCRYPTION_KEY=""
 # Optional: 64 random hex characters; encrypts WeChat credentials on the server.

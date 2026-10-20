@@ -5,14 +5,14 @@
 ## 使用流程
 
 1. README 按钮创建 Worker、D1 和两个 DO；迁移完成后发布应用，部署脚本自动准备缺少的加密主密钥。
-2. 配置仅本人的 Access 和身份 Secrets，登录后初始化主币种、时区。
+2. 设置账本密码，或选择仅本人的 Access 和身份 Secrets；登录后初始化主币种、时区。
 3. 设置中的 AI 助手提供 Base URL、接口类型（Chat Completions／Responses）、模型、API Key。可测试连接，再保存；测试使用简短合成文本，不读取账本、不调用财务工具、不保存配置。通过只证明文本连接可用，工具和连续记账仍需独立验收。旧配置默认 Chat Completions；选择 Responses 后，两个入口、共享分类器和自动摘要一起切换，具体边界见[协议验证记录](verification/ai-responses-protocol.md)。
 4. Key 保存后清空输入框，不返回完整值。修改同域名的 API 路径或模型时留空保留 Key，更换服务域名必须重新填写 Key；配置尚不存在或无法解密时必须重新填写。清除需本人明确确认，保留所有账目、草稿和会话。
 5. 微信设置直接展示连接按钮、二维码及验证码流程，底层加密密钥不交给使用者填写。可先绑定再配置 AI；AI 未配置时网页与微信明确提示。后续网页、微信意图识别及自动摘要都读取同一服务配置。
 
 ## 服务端边界
 
-- 所有配置接口先校验唯一 Access 本人；写入检查同源和 JSON 大小。无匿名认领、无模型工具修改配置、无运行时 Cloudflare 管理令牌。
+- 所有配置接口先校验唯一账本拥有者（密码会话或 Access）；写入检查同源和 JSON 大小。无匿名认领、无模型工具修改配置、无运行时 Cloudflare 管理令牌。
 - `CONFIG_ENCRYPTION_KEY` 为每部署独立的随机 32 字节 Cloudflare Secret；AI 配置使用 AES-GCM、随机 12 字节 nonce 和版本化附加认证数据。`WECHAT_SECRET` 独立保护微信凭据。
 - `0017` 的 `service_configuration` 表保存加密配置及版本，不带业务 dataset，不列入 JSON／CSV。配置写入不改变业务修订号；账本恢复不覆盖服务配置。
 - `GET /api/ai` 只返回地址、接口类型、模型、配置状态、编辑就绪状态及版本。`PUT /api/ai` 保存；`DELETE /api/ai` 明确清除；`POST /api/ai/test` 测试候选配置。所有响应 private/no-store、noindex；失败不返回或记录供应商原始错误。

@@ -33,8 +33,12 @@ export const Route = createRootRoute({
   notFoundComponent: NotFound,
 });
 
-function currentLocale(pathname: string): AppLocale {
-  return pathname === '/zh' || pathname.startsWith('/zh/') ? 'zh' : 'en';
+function currentLocale(pathname: string, search = ''): AppLocale {
+  return pathname === '/zh' ||
+    pathname.startsWith('/zh/') ||
+    (pathname === '/login' && new URLSearchParams(search).get('lang') === 'zh')
+    ? 'zh'
+    : 'en';
 }
 
 function RootLayout() {
@@ -88,7 +92,8 @@ function NotFound() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const pathname = useLocation({ select: (location) => location.pathname });
-  const locale = currentLocale(pathname);
+  const search = useLocation({ select: (location) => location.searchStr });
+  const locale = currentLocale(pathname, search);
   const themeScript = `(()=>{try{const t=localStorage.getItem(${JSON.stringify(websiteConfig.themeStorageKey)})||${JSON.stringify(websiteConfig.defaultTheme)};const d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=d?'dark':'light'}catch{}})()`;
   return (
     <html lang={localeMeta[locale].hreflang} suppressHydrationWarning>

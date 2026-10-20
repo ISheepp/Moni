@@ -49,6 +49,7 @@ export async function startTestServer(port = 0, options = {}) {
           ? undefined
           : Readable.toWeb(request);
       const result = await runtime.dispatchFetch(url, {
+        redirect: 'manual',
         method: request.method,
         headers,
         ...(body ? { body, duplex: 'half' } : {}),

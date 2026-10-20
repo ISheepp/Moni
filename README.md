@@ -92,7 +92,7 @@ Manual bookkeeping, filters, basic reports, manual currency conversion, and back
 | Web app and API | Cloudflare Workers |
 | Entries, notes, and chat history | Cloudflare D1 |
 | Conversation coordination and optional WeChat receiver | SQLite-backed Durable Objects |
-| Owner-only sign-in | Cloudflare Access |
+| Private sign-in | Ledger password, or optional Cloudflare Access |
 | AI | Your chosen OpenAI-compatible provider, with tool-calling support |
 
 The app and its storage run in **your Cloudflare account**. AI requests go to the provider you configure. No VPS, separate database service, or Moni subscription is required.
@@ -109,13 +109,13 @@ You need a GitHub account and a Cloudflare account. AI and WeChat configuration 
 
 ### Option 1: Deploy it yourself
 
-1. Click [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni). Sign in and connect the repository. You do not need an AI key or WeChat credentials at this step.
+1. Click [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni). Sign in and connect the repository. Set **`MONI_PASSWORD`** to a password of 15–128 characters. AI and WeChat credentials can wait. If you plan to use Cloudflare Access instead, you can leave the password blank and follow the setup guide.
 2. Keep the build command **`pnpm run build`** and deploy command **`pnpm run deploy`**. Cloudflare prepares the Worker, D1, and Durable Objects; the deploy command applies database migrations.
-3. Open the generated `workers.dev` address. Follow the setup page to enable **Cloudflare Access for all traffic**, allow only your own identity, and configure `ACCESS_ISSUER`, `ACCESS_AUDIENCE`, and `OWNER_SUBJECT` as Worker Secrets. Business data remains inaccessible until this is complete.
+3. Open the generated `workers.dev` address and sign in with your ledger password. If you skipped it, add `MONI_PASSWORD` as a Worker Secret first. **Cloudflare Access is optional**; existing Access deployments keep their current sign-in method. Missing authentication never exposes your ledger.
 4. Sign in, choose your main currency and time zone, and start using the ledger.
 5. When ready, add your AI key, base URL, model, and API type in **Settings → AI assistant**. To use WeChat, scan the QR code under **Settings → WeChat**.
 
-A custom domain is optional. Detailed Access configuration, CLI deployment, and upgrades are covered in the [deployment guide](docs/deployment.md) (Chinese).
+A custom domain is optional. Both sign-in methods, password resets, CLI deployment, and upgrades are covered in the [deployment guide](docs/deployment.md) (Chinese).
 
 ### Option 2: Ask a coding agent to deploy it
 
@@ -128,7 +128,10 @@ Read README.md and docs/deployment.md first. Use the Deploy to Cloudflare
 flow, or Wrangler if CLI access is already available.
 
 Deploy the Worker with its D1 database and SQLite Durable Objects, apply
-the migrations, and configure Cloudflare Access to allow only me.
+the migrations, and use the default ledger-password login. Have me enter a
+15–128 character MONI_PASSWORD privately in Cloudflare; do not send it in chat.
+Cloudflare Access is optional. Preserve existing Access settings on upgrades
+and never enable password fallback when Access verification fails.
 If using the CLI, create or bind D1 before running remote migrations,
 and ensure the build and deploy use the same private resource configuration.
 Ask me to complete account sign-ins or identity verification when needed.
@@ -158,7 +161,7 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-Local browser access still requires a valid owner Access identity. Automated tests use isolated signed identities and local D1/Durable Objects without reading `.dev.vars`.
+For local password login, set a private `MONI_PASSWORD` and a random 64-character hex `CONFIG_ENCRYPTION_KEY` in the ignored `.dev.vars`, leaving the three Access fields empty. Existing Access deployments keep using their owner identity. Automated tests use synthetic passwords or signed identities with isolated local D1/Durable Objects and never read `.dev.vars`.
 
 | Command | Purpose |
 | --- | --- |

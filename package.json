@@ -30,6 +30,9 @@
   },
   "cloudflare": {
     "bindings": {
+      "MONI_PASSWORD": {
+        "description": "Ledger login password: choose 15–128 characters. This is the only value needed for default password login. Cloudflare Access is an optional alternative; existing Access settings take priority. Keep the real value in Worker Secrets."
+      },
       "DB": {
         "description": "Private ledger, financial records, chat history and staged backups. Keep production and preview databases separate."
       },

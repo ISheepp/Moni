@@ -42,7 +42,7 @@ import {
   saveCategory,
 } from './ledger/taxonomy';
 import { type EntryTransition, transitionEntry } from './ledger/trash';
-import { AccessError, verifyAccess } from './lib/access';
+import { AccessError } from './lib/access';
 import {
   aiConfiguration,
   clearAiSettings,
@@ -50,6 +50,7 @@ import {
   saveAiSettings,
   testAiSettings,
 } from './lib/ai-settings';
+import { handleAuthentication, verifyOwner } from './lib/auth';
 import { chatPersistence } from './lib/chat-persistence';
 import { HttpError, privateResponse, readJson } from './lib/http';
 import { limits } from './lib/limits';
@@ -64,8 +65,10 @@ export async function handlePrivateApi(
   env: Env
 ): Promise<Response> {
   try {
-    await verifyAccess(request, env);
     const url = new URL(request.url);
+    if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/'))
+      return privateResponse(await handleAuthentication(request, env));
+    await verifyOwner(request, env);
     if (url.pathname === '/api/ai' || url.pathname === '/api/ai/test') {
       if (url.pathname === '/api/ai/test' && request.method === 'POST')
         return privateResponse(

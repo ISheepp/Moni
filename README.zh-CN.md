@@ -92,7 +92,7 @@ Moni 会把这句话拆成两笔账，建议类目和标签，把商家等细节
 | 网页和 API | Cloudflare Workers |
 | 账目、备注和聊天历史 | Cloudflare D1 |
 | 会话协调和可选微信接收器 | SQLite Durable Objects |
-| 仅本人可访问的登录保护 | Cloudflare Access |
+| 私人账本登录保护 | 账本密码，或可选的 Cloudflare Access |
 | AI | 自选支持工具调用的 OpenAI 兼容服务 |
 
 应用和数据存储都在**你自己的 Cloudflare 账号**里，AI 请求发送给你配置的服务商。不需要 VPS、单独的数据库服务，也没有 Moni 订阅费。
@@ -109,13 +109,13 @@ Moni 会把这句话拆成两笔账，建议类目和标签，把商家等细节
 
 ### 方式一：自己操作
 
-1. 点击 [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni)，登录并连接仓库。这一步不用填写 AI Key 或微信凭据。
+1. 点击 [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni)，登录并连接仓库。设置 **`MONI_PASSWORD`**，使用 15–128 个字符的访问密码；AI Key 和微信凭据稍后再配。选择 Cloudflare Access 时可留空密码，再按引导配置。
 2. 保留构建命令 **`pnpm run build`** 和部署命令 **`pnpm run deploy`**。Cloudflare 准备 Worker、D1 和 Durable Objects，部署命令会执行数据库迁移。
-3. 打开生成的 `workers.dev` 地址，按页面引导启用 **Cloudflare Access 的 All traffic 保护**，只允许本人访问，并将 `ACCESS_ISSUER`、`ACCESS_AUDIENCE` 和 `OWNER_SUBJECT` 配为 Worker Secrets。完成前，业务数据不能访问。
+3. 打开生成的 `workers.dev` 地址，使用账本密码登录。若部署时未填密码，先在 Worker Secrets 中添加 `MONI_PASSWORD`。**Cloudflare Access 为可选方式**，已配置的实例继续使用原登录方式；缺少认证配置时不会公开账目。
 4. 本人登录后选择主币种和时区，就能开始使用账本。
 5. 需要 AI 时，在「**设置 → AI 助手**」填写 Key、Base URL、模型和接口类型；需要微信时，在「**设置 → 微信入口**」扫码连接。
 
-自定义域名是可选项。Access 的详细配置、CLI 部署和升级方式见[部署指南](docs/deployment.md)。
+自定义域名是可选项。两种登录方式、密码重置、CLI 部署和升级方式见[部署指南](docs/deployment.md)。
 
 ### 方式二：交给 Agent
 
@@ -128,7 +128,9 @@ Moni 会把这句话拆成两笔账，建议类目和标签，把商家等细节
 流程；如果已有 CLI 登录态，也可以使用 Wrangler。
 
 部署 Worker、D1 数据库和 SQLite Durable Objects，执行数据库迁移，
-配置仅允许我本人访问的 Cloudflare Access。
+默认使用账本密码登录，让我在 Cloudflare 中私下设置 15–128 个字符的
+MONI_PASSWORD，不要让我在聊天中发送密码。Cloudflare Access 是可选方式；
+升级时保留已有 Access 配置，验证失败时不能自动回退到密码模式。
 如果走 CLI，先创建或绑定 D1，再执行远端迁移，并确保构建与部署
 使用同一份私密资源配置。遇到账号登录或身份验证，让我亲自完成。
 
@@ -156,7 +158,7 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-本地浏览器同样需要有效的本人 Access 身份。自动化测试使用独立签名身份和本地真实 D1／Durable Objects，不读取 `.dev.vars`。
+本地密码登录需在忽略的 `.dev.vars` 中设置 `MONI_PASSWORD` 和随机的 64 位十六进制 `CONFIG_ENCRYPTION_KEY`，并留空三项 Access 配置。已有 Access 实例继续使用本人身份。自动化测试使用合成密码或独立签名身份、本地真实 D1／Durable Objects，不读取 `.dev.vars`。
 
 | 命令 | 用途 |
 | --- | --- |
