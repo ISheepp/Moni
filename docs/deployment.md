@@ -1,6 +1,6 @@
 # Moni v0.1 部署指南
 
-2026-10-21 更新。默认首次打开网站设置账本密码，Cloudflare Access 可选；两种方式的规则见[访问控制](authentication.md)。历史版本的按钮部署、远端迁移、本人 Access、自定义域名与重复发布已实际验证；网页首次设置为本次追加流程，不能沿用历史结果宣称已云端通过；部署后网页配置 AI 与微信的追加需求见[网页配置设计](web-configuration.md)。验证层次见[部署记录](verification/deployment-readiness.md)。微信作为单独批准的可选扩展已提供本地接入实现，配置与待验收事项见[微信接入说明](wechat-integration.md)，不改动原 v0.1 的 19 项验收基线。
+2026-10-21 更新。默认首次打开网站设置账本密码，Cloudflare Access 可选；两种方式的规则见[访问控制](authentication.md)。已按 README 从按钮新建独立项目，真实验证部署表单无需 Secret、自动迁移与加密密钥生成、网页首次设置及重登录，见[本次云端验收](verification/first-run-password.md)。原 Access、自定义域名与重复发布的历史验证继续保留；部署后网页配置 AI 与微信的追加需求见[网页配置设计](web-configuration.md)。验证层次见[部署记录](verification/deployment-readiness.md)。微信作为单独批准的可选扩展已提供本地接入实现，配置与待验收事项见[微信接入说明](wechat-integration.md)，不改动原 v0.1 的 19 项验收基线。
 
 ## 一键入口与默认资源
 

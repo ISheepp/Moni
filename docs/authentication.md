@@ -2,7 +2,7 @@
 
 2026-10-20，使用者批准：默认提供账本密码，Cloudflare Access 改为可选；既有 Access 实例继续使用原登录方式。这是原首版访问设计的追加决定，原验收历史与父规格不改写。
 
-2026-10-21 追加：新部署改为首次打开网站时设置密码，无需部署者操作 Secret。原 Secret 密码和 Access 兼容规则保留；[本次验证记录](verification/first-run-password.md)区分本地通过与待进行的云端验收。
+2026-10-21 追加：新部署改为首次打开网站时设置密码，无需部署者操作 Secret。原 Secret 密码和 Access 兼容规则保留；[本次验证记录](verification/first-run-password.md)包含本地与独立云端验收结果，以及生产账目和 Access 的保护核对。
 
 当前实现、分层验证与发布状态见[验证记录](verification/password-and-access.md)，包含首轮失败和复验结果。
 
