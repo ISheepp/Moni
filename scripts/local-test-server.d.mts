@@ -11,6 +11,7 @@ export function startTestServer(
       ACCESS_AUDIENCE?: string;
       OWNER_SUBJECT?: string;
       MONI_PASSWORD?: string;
+      CONFIG_ENCRYPTION_KEY?: string;
     };
   }
 ): Promise<{

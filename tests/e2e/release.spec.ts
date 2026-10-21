@@ -296,13 +296,18 @@ test('an unauthenticated browser receives only the bilingual restricted view, pu
   ).toBe(true);
 });
 
-test('a new deployment opens setup before secrets are configured and never exposes or initializes a ledger', async ({
+test('an incomplete deployment shows guidance before encryption is ready and never exposes or initializes a ledger', async ({
   page,
   isMobile,
 }) => {
   const fixture = await startTestServer(0, {
     ai: {},
-    access: { ACCESS_ISSUER: '', ACCESS_AUDIENCE: '', OWNER_SUBJECT: '' },
+    access: {
+      ACCESS_ISSUER: '',
+      ACCESS_AUDIENCE: '',
+      OWNER_SUBJECT: '',
+      CONFIG_ENCRYPTION_KEY: '',
+    },
     provider: async () => {
       throw new Error('Deployment setup must not contact external services');
     },

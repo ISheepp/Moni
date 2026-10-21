@@ -14,13 +14,11 @@ import { expect, it } from 'vitest';
 
 const scripts = JSON.parse(await readFile('package.json', 'utf8')).scripts;
 
-it('asks deploy-button users only for the optional ledger password and keeps every example blank', async () => {
+it('asks deploy-button users for no secrets and keeps local examples blank', async () => {
   await expect(readFile('.dev.vars.example')).rejects.toMatchObject({
     code: 'ENOENT',
   });
-  expect(parseEnv(await readFile('.env.example', 'utf8'))).toEqual({
-    MONI_PASSWORD: '',
-  });
+  expect(parseEnv(await readFile('.env.example', 'utf8'))).toEqual({});
   const template = parseEnv(
     await readFile('config/local.vars.example', 'utf8')
   );

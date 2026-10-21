@@ -109,10 +109,10 @@ Moni 会把这句话拆成两笔账，建议类目和标签，把商家等细节
 
 ### 方式一：自己操作
 
-1. 点击 [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni)，登录并连接仓库。设置 **`MONI_PASSWORD`**，使用 15–128 个字符的访问密码；AI Key 和微信凭据稍后再配。选择 Cloudflare Access 时可留空密码，再按引导配置。
+1. 点击 [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni)，登录并连接仓库。**部署表单无需填写密码或 API Key。**
 2. 保留构建命令 **`pnpm run build`** 和部署命令 **`pnpm run deploy`**。Cloudflare 准备 Worker、D1 和 Durable Objects，部署命令会执行数据库迁移。
-3. 打开生成的 `workers.dev` 地址，使用账本密码登录。若部署时未填密码，先在 Worker Secrets 中添加 `MONI_PASSWORD`。**Cloudflare Access 为可选方式**，已配置的实例继续使用原登录方式；缺少认证配置时不会公开账目。
-4. 本人登录后选择主币种和时区，就能开始使用账本。
+3. 打开生成的 `workers.dev` 地址，**直接在网页设置账本密码**，输入并确认 15–128 个字符的密码。请先完成设置再分享网址，首次保存后初始化入口将关闭。**Cloudflare Access 为可选方式**，已有 Access 或密码的实例继续使用原登录方式。
+4. 设置成功后自动登录，选择主币种和时区，就能开始使用账本。未登录不能读取账目。
 5. 需要 AI 时，在「**设置 → AI 助手**」填写 Key、Base URL、模型和接口类型；需要微信时，在「**设置 → 微信入口**」扫码连接。
 
 自定义域名是可选项。两种登录方式、密码重置、CLI 部署和升级方式见[部署指南](docs/deployment.md)。
@@ -128,8 +128,9 @@ Moni 会把这句话拆成两笔账，建议类目和标签，把商家等细节
 流程；如果已有 CLI 登录态，也可以使用 Wrangler。
 
 部署 Worker、D1 数据库和 SQLite Durable Objects，执行数据库迁移，
-默认使用账本密码登录，让我在 Cloudflare 中私下设置 15–128 个字符的
-MONI_PASSWORD，不要让我在聊天中发送密码。Cloudflare Access 是可选方式；
+部署后打开网站，让我自己设置并确认 15–128 个字符的账本密码。
+部署表单和聊天都无需提供密码或 API Key，先完成首次设置再分享网址。
+Cloudflare Access 是可选方式；
 升级时保留已有 Access 配置，验证失败时不能自动回退到密码模式。
 如果走 CLI，先创建或绑定 D1，再执行远端迁移，并确保构建与部署
 使用同一份私密资源配置。遇到账号登录或身份验证，让我亲自完成。
@@ -144,7 +145,7 @@ AI 和微信留到部署后的网页设置里配置。
 
 ## 密钥和隐私
 
-网页填写的 AI Key 在服务端加密保存，保存后不回显，也不进入账本备份。部署会生成加密密钥，升级时要保留。微信通过设置页扫码连接。
+网页设置的密码只保存加盐校验值，不保存明文，认证信息不进入账本备份。网页填写的 AI Key 在服务端加密保存，保存后不回显，也不进入账本备份。部署会生成加密密钥，升级时要保留。微信通过设置页扫码连接。
 
 真实密钥和个人部署配置不要提交到 Git。本地开发使用被忽略的 `.dev.vars`，仓库里的[配置示例](config/local.vars.example)只包含空值。
 
@@ -158,7 +159,7 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-本地密码登录需在忽略的 `.dev.vars` 中设置 `MONI_PASSWORD` 和随机的 64 位十六进制 `CONFIG_ENCRYPTION_KEY`，并留空三项 Access 配置。已有 Access 实例继续使用本人身份。自动化测试使用合成密码或独立签名身份、本地真实 D1／Durable Objects，不读取 `.dev.vars`。
+本地首次设置需在忽略的 `.dev.vars` 中设置随机的 64 位十六进制 `CONFIG_ENCRYPTION_KEY`，留空三项 Access 配置，再到网页设置密码。已有部署或恢复访问时，可选用私密 `MONI_PASSWORD` 覆盖网页密码。已有 Access 实例继续使用本人身份。自动化测试使用合成密码或独立签名身份、本地真实 D1／Durable Objects，不读取 `.dev.vars`。
 
 | 命令 | 用途 |
 | --- | --- |

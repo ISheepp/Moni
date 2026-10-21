@@ -561,7 +561,7 @@
   "entry_overview": "查看、筛选和管理每一笔收支。",
   "entry_loading": "正在整理账目…",
   "login_title": "欢迎回来",
-  "login_description": "你的账本仅供自己访问。请输入部署 Moni 时设置的密码。",
+  "login_description": "你的账本仅供自己访问。请输入账本密码。",
   "login_password": "账本密码",
   "login_session_hint": "在此浏览器保持登录，最长 30 天。",
   "login_sign_in": "打开我的账本",
@@ -575,6 +575,16 @@
   "login_deployment_guide": "查看部署指南",
   "login_access_title": "账本访问",
   "login_access_hint": "你的身份由 Cloudflare Access 验证。可在 Cloudflare 中管理允许访问的身份。",
-  "login_password_hint": "修改或重置密码时，在 Worker Secrets 中更新 MONI_PASSWORD，已有浏览器登录会随之失效。也可以选择使用 Cloudflare Access。",
-  "login_sign_out": "退出登录"
+  "login_password_hint": "密码用于保护此账本。忘记密码时，部署者可在 Worker Secrets 设置 MONI_PASSWORD 恢复访问，已有浏览器登录将失效。也可以选择使用 Cloudflare Access。",
+  "login_sign_out": "退出登录",
+  "setup_title": "设置你的账本密码",
+  "setup_description": "设置密码，保护你的私人账本。AI 和微信可以稍后在设置中配置。",
+  "setup_owner_notice": "请由部署者先完成设置，再分享网址。首次保存密码后，此初始化入口将关闭。",
+  "setup_password_hint": "使用 15–128 个字符，推荐较长且容易记住的短语，并保存到密码管理器。",
+  "setup_confirm_password": "确认密码",
+  "setup_submit": "设置密码并继续",
+  "setup_saving": "正在设置密码…",
+  "setup_password_mismatch": "两次密码不一致，请重新确认。",
+  "setup_password_invalid": "密码需要 15–128 个字符，且不能全为空格。",
+  "setup_already_configured": "此站点已经设置过密码，请使用该密码登录。"
 }

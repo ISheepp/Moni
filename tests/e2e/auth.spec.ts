@@ -6,19 +6,189 @@ const fixtures: Awaited<ReturnType<typeof startTestServer>>[] = [];
 test.afterEach(async () => {
   for (const fixture of fixtures.splice(0)) await fixture.close();
 });
-async function fixture() {
+async function fixture(firstRun = false) {
   const value = await startTestServer(0, {
     ai: { AI_API_KEY: '', AI_BASE_URL: '', AI_MODEL: '' },
     access: {
       ACCESS_ISSUER: '',
       ACCESS_AUDIENCE: '',
       OWNER_SUBJECT: '',
-      MONI_PASSWORD: password,
+      MONI_PASSWORD: firstRun ? '' : password,
     },
   });
   fixtures.push(value);
   return value;
 }
+
+test('first deployment sets its password on the web, initializes without AI and keeps the password after sign-out', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const server = await fixture(true);
+  await page.goto(`${server.url}/?view=settings`);
+  await expect(page).toHaveURL(/\/login\?/);
+  await expect(
+    page.getByRole('heading', { name: 'Set your ledger password', exact: true })
+  ).toBeVisible();
+  await expect(page.locator('form')).toHaveAttribute('method', 'post');
+  expect((await page.request.get(`${server.url}/api/settings`)).status()).toBe(
+    503
+  );
+  const input = page.getByLabel('Ledger password', { exact: true });
+  const confirmation = page.getByLabel('Confirm password', { exact: true });
+  await expect(input).toHaveAttribute('autocomplete', 'new-password');
+  await expect(confirmation).toHaveAttribute('autocomplete', 'new-password');
+  await page.screenshot({
+    path: test.info().outputPath('first-run-password.png'),
+    fullPage: true,
+  });
+  await input.fill(password);
+  await confirmation.fill('synthetic-mismatched-password');
+  await page
+    .getByRole('button', { name: 'Set password and continue', exact: true })
+    .click();
+  await expect(page.getByRole('alert')).toContainText(
+    'The passwords do not match'
+  );
+  await expect(confirmation).toBeFocused();
+  await expect(confirmation).toHaveAttribute('aria-invalid', 'true');
+  await confirmation.fill(password);
+  await page
+    .getByRole('button', { name: 'Set password and continue', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', {
+      name: 'Create your private ledger',
+      exact: true,
+    })
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.has('password')).toBe(false);
+  await page
+    .getByRole('button', { name: 'Create ledger', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Settings', exact: true })
+  ).toBeVisible();
+  const ai = await page.evaluate(async () => {
+    const response = await fetch('/api/ai');
+    return { status: response.status, body: await response.json() };
+  });
+  expect(ai.status).toBe(200);
+  expect(ai.body).toMatchObject({ configured: false });
+  await page
+    .getByRole('region', { name: 'Ledger access', exact: true })
+    .getByRole('button', { name: 'Sign out', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Welcome back', exact: true })
+  ).toBeVisible();
+  await expect(confirmation).toHaveCount(0);
+  expect((await page.request.get(`${server.url}/api/settings`)).status()).toBe(
+    401
+  );
+  await input.fill(password);
+  await page
+    .getByRole('button', { name: 'Unlock my ledger', exact: true })
+    .click();
+  await page.waitForURL((url) => url.pathname === '/');
+  await page.goto(`${server.url}/?view=settings`);
+  await expect(
+    page.getByRole('heading', { name: 'Settings', exact: true })
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Settings', exact: true })
+  ).toBeVisible();
+});
+
+test('Chinese first-run setup works in dark mode at 320px with keyboard confirmation', async ({
+  page,
+}) => {
+  const server = await fixture(true);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto(`${server.url}/zh`);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await expect(
+    page.getByRole('heading', { name: '设置你的账本密码', exact: true })
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth
+    )
+  ).toBe(true);
+  await page.screenshot({
+    path: test.info().outputPath('first-run-password-zh-dark.png'),
+    fullPage: true,
+  });
+  await page.getByLabel('账本密码', { exact: true }).fill(password);
+  await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('button', { name: '显示密码', exact: true })
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('确认密码', { exact: true })).toBeFocused();
+  await page.keyboard.type(password);
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('heading', { name: '建立你的私人账本', exact: true })
+  ).toBeVisible();
+});
+
+test('a stale first-run tab cannot replace the password saved in another tab', async ({
+  page,
+  context,
+}) => {
+  const server = await fixture(true);
+  await page.goto(server.url);
+  await expect(
+    page.getByRole('heading', { name: 'Set your ledger password', exact: true })
+  ).toBeVisible();
+  await page
+    .getByLabel('Ledger password', { exact: true })
+    .fill('synthetic-other-tab-password');
+  await page
+    .getByLabel('Confirm password', { exact: true })
+    .fill('synthetic-other-tab-password');
+  const other = await context.newPage();
+  await other.goto(server.url);
+  await expect(
+    other.getByRole('heading', {
+      name: 'Set your ledger password',
+      exact: true,
+    })
+  ).toBeVisible();
+  await other.getByLabel('Ledger password', { exact: true }).fill(password);
+  await other.getByLabel('Confirm password', { exact: true }).fill(password);
+  await other
+    .getByRole('button', { name: 'Set password and continue', exact: true })
+    .click();
+  await expect(
+    other.getByRole('heading', {
+      name: 'Create your private ledger',
+      exact: true,
+    })
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Set password and continue', exact: true })
+    .click();
+  await expect(page.getByRole('alert')).toContainText(
+    'A password has already been set'
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Welcome back', exact: true })
+  ).toBeVisible();
+  await expect(page.getByLabel('Ledger password', { exact: true })).toHaveValue(
+    ''
+  );
+  await expect(
+    page.getByLabel('Confirm password', { exact: true })
+  ).toHaveCount(0);
+  await other.close();
+});
 
 test('server-rendered login never sends the password in a navigation before JavaScript is ready', async ({
   page,

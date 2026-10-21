@@ -561,7 +561,7 @@
   "entry_overview": "Find, review and manage your income and spending.",
   "entry_loading": "Loading entries…",
   "login_title": "Welcome back",
-  "login_description": "Your ledger stays private. Enter the password you set when deploying Moni.",
+  "login_description": "Your ledger stays private. Enter your ledger password.",
   "login_password": "Ledger password",
   "login_session_hint": "Stay signed in on this browser for up to 30 days.",
   "login_sign_in": "Unlock my ledger",
@@ -575,6 +575,16 @@
   "login_deployment_guide": "Deployment guide",
   "login_access_title": "Ledger access",
   "login_access_hint": "Your identity is verified by Cloudflare Access. Manage allowed identities in Cloudflare.",
-  "login_password_hint": "To change or reset your password, update MONI_PASSWORD in your Worker Secrets. Existing browser sessions will stop working. Cloudflare Access is an optional alternative.",
-  "login_sign_out": "Sign out"
+  "login_password_hint": "Your password protects this ledger. If you forget it, the deployer can set MONI_PASSWORD in Worker Secrets to recover access. Existing browser sessions will stop working. Cloudflare Access is an optional alternative.",
+  "login_sign_out": "Sign out",
+  "setup_title": "Set your ledger password",
+  "setup_description": "Choose a password to protect your private ledger. You can configure AI and connect WeChat later in Settings.",
+  "setup_owner_notice": "For the deployer: finish this first-time setup before sharing the website address. The first saved password locks setup.",
+  "setup_password_hint": "Use 15–128 characters. A longer passphrase is easier to remember. Save it in your password manager.",
+  "setup_confirm_password": "Confirm password",
+  "setup_submit": "Set password and continue",
+  "setup_saving": "Setting password…",
+  "setup_password_mismatch": "The passwords do not match. Enter the same password in both fields.",
+  "setup_password_invalid": "Use a password of 15–128 characters that is not only spaces.",
+  "setup_already_configured": "A password has already been set. Sign in with that password to continue."
 }

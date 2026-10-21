@@ -46,7 +46,7 @@ it('opens bilingual deployment guidance without AI, WeChat or identity secrets a
         config
       );
       expect(denied.status).toBe(503);
-      expect(await denied.json()).toEqual({ error: 'access_not_configured' });
+      expect(await denied.json()).toEqual({ error: 'password_setup_required' });
     }
   }
 });

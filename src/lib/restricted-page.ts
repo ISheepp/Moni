@@ -13,6 +13,7 @@ export async function deploymentSetupPage(request: Request, env: Env) {
         LEFT JOIN service_configuration c ON c.name = 'ai'
         LEFT JOIN auth_sessions a ON 1 = 0
         LEFT JOIN auth_login_limits l ON 1 = 0
+        LEFT JOIN auth_credentials ac ON 1 = 0
         WHERE s.singleton = 1 LIMIT 1`).first()
     );
   } catch {
@@ -67,11 +68,11 @@ export function restrictedPage(
     <li>${zh ? '账本存储：' : 'Ledger storage: '}${deployment.database ? (zh ? '已就绪' : 'ready') : zh ? '需要完成数据库绑定与迁移' : 'complete the database binding and migrations'}</li>
     <li>${zh ? '会话存储：' : 'Conversation storage: '}${deployment.conversations ? (zh ? '已绑定' : 'bound') : zh ? '需要完成会话存储绑定' : 'complete the conversation storage binding'}</li></ul></section>
     <section aria-labelledby="next-steps"><h2 id="next-steps">${zh ? '接下来，保护你的账本' : 'Next, protect your ledger'}</h2>
-    <ol><li>${zh ? '推荐使用账本密码：在此 Worker 的 Settings → Variables and Secrets 添加 MONI_PASSWORD，类型选 Secret，设置 15–128 个字符的密码并发布。部署表单中已填写的密码会直接生效。' : 'Recommended: set a ledger password. In this Worker’s Settings → Variables and Secrets, add MONI_PASSWORD as a Secret, choose 15–128 characters, and deploy. A password entered in the deploy form is already configured.'}</li>
+    <ol><li>${zh ? '全新实例：等待部署完成后打开首页，在网页设置并确认账本密码，无需手动添加 Secret。已有账本缺少访问配置时，请由部署者恢复原密码或 Access 配置。' : 'New instance: wait for deployment to finish, then open the home page to set and confirm your ledger password. No manual Secret is needed. For an existing ledger, the deployer must restore its password or Access configuration.'}</li>
     <li>${zh ? '也可以选择 Cloudflare Access：启用 All traffic，仅允许本人，再按部署指南配置团队域名、应用 AUD 和本人用户 ID。已有 Access 配置会优先使用。' : 'Alternatively, enable Cloudflare Access for All traffic, allow only yourself, and follow the deployment guide to configure your team domain, application AUD and owner user ID. Existing Access settings take priority.'}</li>
     <li>${zh ? '重新验证访问，登录后选择主币种与时区，即可开始手动记账。' : 'Verify access again, sign in, then choose your primary currency and time zone to start manual bookkeeping.'}</li></ol></section>
     <div class="notice"><strong>${zh ? 'AI 和微信可以稍后配置' : 'AI and WeChat can wait'}</strong><p>${zh ? '无需模型 Key 或微信连接，即可完成部署。本人验证后可在设置中填写 AI 配置或扫码连接微信，也可先手动记账。' : 'Deployment needs no model key or WeChat connection. After owner verification, configure AI or scan to connect WeChat in Settings, or start with manual entries.'}</p></div>
-    <p>${zh ? '此页仅提供状态与说明，不接受密钥，也不提供账本认领入口。' : 'This page provides status and instructions only. It accepts no keys and cannot assign ledger ownership.'}</p>
+    <p>${zh ? '此页仅提供状态与说明，不接受密钥，也不能重新认领已有账本。' : 'This page provides status and instructions only. It accepts no keys and cannot reassign an existing ledger.'}</p>
     <a href="https://github.com/ISheepp/Moni/blob/main/docs/deployment.md" rel="noreferrer">${zh ? '查看部署指南' : 'Read deployment guide'}</a>`
     : `<div class="notice"><strong>${incomplete ? (zh ? '必要配置未完成' : 'Required setup is incomplete') : zh ? '访问验证未完成' : 'Access verification is incomplete'}</strong><p>${zh ? '为保护你的数据安全，请完成访问验证后再使用。' : 'Complete access verification before using your private ledger.'}</p></div>
     <details><summary>${zh ? '查看配置说明' : 'View setup guidance'}</summary><p>${zh ? '部署者可在 Cloudflare 中设置账本密码，或配置仅允许本人的 Access。已有 Access 配置不会自动回退到密码模式；完成后重新验证访问。' : 'The deployer can set a ledger password in Cloudflare or configure owner-only Access. Existing Access settings never silently fall back to password login. Verify access again after setup.'}</p></details>`;

@@ -45,6 +45,7 @@ beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM auth_sessions'),
     env.DB.prepare('DELETE FROM auth_login_limits'),
+    env.DB.prepare('DELETE FROM auth_credentials'),
   ]);
 });
 
@@ -64,7 +65,9 @@ describe('single-owner password authentication', () => {
     ]) {
       const response = await api(path, '', settings);
       expect(response.status, path).toBe(503);
-      expect(await response.json()).toEqual({ error: 'access_not_configured' });
+      expect(await response.json()).toEqual({
+        error: 'password_setup_required',
+      });
     }
   });
 

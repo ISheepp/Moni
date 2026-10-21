@@ -46,7 +46,11 @@ export default {
         );
       return privateResponse(await server.fetch(request));
     } catch (error) {
-      if (error instanceof AccessError && error.code === 'login_required') {
+      if (
+        error instanceof AccessError &&
+        (error.code === 'login_required' ||
+          error.code === 'password_setup_required')
+      ) {
         if (login && (request.method === 'GET' || request.method === 'HEAD'))
           return privateResponse(await server.fetch(request));
         if (request.method === 'GET' || request.method === 'HEAD')

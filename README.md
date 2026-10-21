@@ -109,10 +109,10 @@ You need a GitHub account and a Cloudflare account. AI and WeChat configuration 
 
 ### Option 1: Deploy it yourself
 
-1. Click [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni). Sign in and connect the repository. Set **`MONI_PASSWORD`** to a password of 15–128 characters. AI and WeChat credentials can wait. If you plan to use Cloudflare Access instead, you can leave the password blank and follow the setup guide.
+1. Click [**Deploy to Cloudflare**](https://deploy.workers.cloudflare.com/?url=https://github.com/ISheepp/Moni). Sign in and connect the repository. **No passwords or API keys are needed in the deployment form.**
 2. Keep the build command **`pnpm run build`** and deploy command **`pnpm run deploy`**. Cloudflare prepares the Worker, D1, and Durable Objects; the deploy command applies database migrations.
-3. Open the generated `workers.dev` address and sign in with your ledger password. If you skipped it, add `MONI_PASSWORD` as a Worker Secret first. **Cloudflare Access is optional**; existing Access deployments keep their current sign-in method. Missing authentication never exposes your ledger.
-4. Sign in, choose your main currency and time zone, and start using the ledger.
+3. Open the generated `workers.dev` address and **set your ledger password on the website** (15–128 characters, entered twice). Do this before sharing the address: the first saved password locks setup. **Cloudflare Access is optional**; existing Access or password deployments keep their sign-in method.
+4. You are signed in automatically. Choose your main currency and time zone, and start using the ledger. Unauthenticated visitors cannot read ledger data.
 5. When ready, add your AI key, base URL, model, and API type in **Settings → AI assistant**. To use WeChat, scan the QR code under **Settings → WeChat**.
 
 A custom domain is optional. Both sign-in methods, password resets, CLI deployment, and upgrades are covered in the [deployment guide](docs/deployment.md) (Chinese).
@@ -128,8 +128,9 @@ Read README.md and docs/deployment.md first. Use the Deploy to Cloudflare
 flow, or Wrangler if CLI access is already available.
 
 Deploy the Worker with its D1 database and SQLite Durable Objects, apply
-the migrations, and use the default ledger-password login. Have me enter a
-15–128 character MONI_PASSWORD privately in Cloudflare; do not send it in chat.
+the migrations, then open the deployed website so I can set and confirm my
+15–128 character ledger password myself. Do not ask for a password or API key
+in the deployment form or chat. Finish first-time setup before sharing the URL.
 Cloudflare Access is optional. Preserve existing Access settings on upgrades
 and never enable password fallback when Access verification fails.
 If using the CLI, create or bind D1 before running remote migrations,
@@ -147,7 +148,7 @@ cannot read the ledger. Leave AI and WeChat setup to the app's Settings page.
 
 ## Keys and privacy
 
-AI keys entered in Settings are encrypted on the server, are never returned to the browser after saving, and are excluded from ledger backups. Deployment generates the encryption secrets; keep them when upgrading. WeChat connects through the Settings QR flow.
+The website stores a salted password verifier, never the password itself. Authentication is excluded from ledger backups. AI keys entered in Settings are encrypted on the server, are never returned to the browser after saving, and are excluded from ledger backups. Deployment generates the encryption secrets; keep them when upgrading. WeChat connects through the Settings QR flow.
 
 Keep real keys and personal deployment settings out of Git. For local work, use an ignored `.dev.vars`; the committed [configuration example](config/local.vars.example) contains empty values only.
 
@@ -161,7 +162,7 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-For local password login, set a private `MONI_PASSWORD` and a random 64-character hex `CONFIG_ENCRYPTION_KEY` in the ignored `.dev.vars`, leaving the three Access fields empty. Existing Access deployments keep using their owner identity. Automated tests use synthetic passwords or signed identities with isolated local D1/Durable Objects and never read `.dev.vars`.
+For local first-run setup, set a random 64-character hex `CONFIG_ENCRYPTION_KEY` in the ignored `.dev.vars`, leave the three Access fields empty, and choose your password on the website. An optional private `MONI_PASSWORD` overrides web login for existing deployments or recovery. Existing Access deployments keep using their owner identity. Automated tests use synthetic passwords or signed identities with isolated local D1/Durable Objects and never read `.dev.vars`.
 
 | Command | Purpose |
 | --- | --- |
