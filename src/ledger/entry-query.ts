@@ -15,6 +15,7 @@ export const entryFilters = z
     requiredTagIds: z.array(z.uuid()).max(20).optional(),
     keyword: z.string().trim().max(200).optional(),
     untagged: z.literal(true).optional(),
+    sort: z.enum(['amount_desc']).optional(),
     page: z.number().int().min(1).max(5000).default(1),
     pageSize: z.number().int().min(1).max(100).default(20),
   })
@@ -76,7 +77,7 @@ export async function queryEntries(
       .bind(...values),
     db
       .prepare(
-        `${entrySelect} WHERE ${condition} ORDER BY ${trash ? 'e.deleted_at' : 'e.entry_date'} DESC, e.id DESC LIMIT ? OFFSET ?`
+        `${entrySelect} WHERE ${condition} ORDER BY ${!trash && filters.sort === 'amount_desc' ? 'e.base_minor DESC, ' : ''}${trash ? 'e.deleted_at' : 'e.entry_date'} DESC, e.id DESC LIMIT ? OFFSET ?`
       )
       .bind(...values, filters.pageSize, (filters.page - 1) * filters.pageSize),
   ]);

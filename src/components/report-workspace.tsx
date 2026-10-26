@@ -7,18 +7,20 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconFilter,
-  IconHanger,
   IconInfoCircle,
   IconRefresh,
-  IconRun,
-  IconTag,
-  IconToolsKitchen2,
   IconWallet,
 } from '@tabler/icons-react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { EntryFilterForm } from '@/components/entry-list';
+import {
+  ReportChanges,
+  ReportComparisonSummary,
+  ReportDelta,
+} from '@/components/report-comparison';
+import { ReportEntryRanking } from '@/components/report-entry-ranking';
 import { ReportMonthPicker } from '@/components/report-month-picker';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -26,7 +28,8 @@ import { Select } from '@/components/ui/select';
 import { shiftMonth, todayInZone } from '@/ledger/dates';
 import { type EntryFilters, entryFilters } from '@/ledger/entry-query';
 import { decimalAmount, displayMoney } from '@/ledger/money';
-import type { Report } from '@/ledger/reports';
+import { averageMinor } from '@/ledger/report-comparison';
+import { type Report, reportSelection } from '@/ledger/reports';
 import type { LedgerSettings } from '@/ledger/settings';
 import type { Taxonomy } from '@/ledger/taxonomy';
 import { categoryLabel } from '@/lib/category-label';
@@ -67,6 +70,10 @@ export const reportOptions = z
     months: z.number().int().min(1).max(120),
     groupBy: z.enum(['category', 'tag']),
     interval: z.enum(['day', 'week', 'month']),
+    selection: reportSelection.optional(),
+    ranking: z.enum(['category', 'tag', 'entries']).optional(),
+    expanded: z.string().max(100).optional(),
+    changes: z.enum(['increase', 'decrease']).optional(),
   })
   .strict();
 
@@ -91,17 +98,36 @@ export function ReportWorkspace({
     () => options?.month ?? todayInZone(settings.timeZone).slice(0, 7)
   );
   const [months, setMonths] = useState(options?.months ?? 3);
-  const [groupBy, setGroupBy] = useState<'category' | 'tag'>(
-    options?.groupBy ?? 'category'
+  const [ranking, setRanking] = useState<'category' | 'tag' | 'entries'>(
+    options?.ranking ?? options?.groupBy ?? 'category'
+  );
+  const groupBy = ranking === 'tag' ? 'tag' : 'category';
+  const [selection, setSelection] = useState(options?.selection);
+  const [changeDirection, setChangeDirection] = useState<
+    'increase' | 'decrease'
+  >(options?.changes ?? 'increase');
+  const [expanded, setExpanded] = useState<string | undefined>(
+    options?.expanded
   );
   const [interval, setInterval] = useState<'day' | 'week' | 'month'>(
     options?.interval ?? 'week'
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const chartScroller = useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const location = JSON.stringify({
     filters,
-    report: { mode, month, months, groupBy, interval },
+    report: {
+      mode,
+      month,
+      months,
+      groupBy,
+      interval,
+      selection,
+      ranking,
+      expanded,
+      changes: changeDirection,
+    },
   });
   useEffect(() => {
     void navigate({
@@ -115,8 +141,12 @@ export function ReportWorkspace({
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<null | 'load' | 'large'>(null);
   const [data, setData] = useState<Report | null>(null);
+  const [loadedRequest, setLoadedRequest] = useState<{
+    chart: string;
+    scope: string;
+  } | null>(null);
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
-  const payload = JSON.stringify({
+  const request = {
     filters: {
       ...filters,
       ...(mode !== 'custom' ? { from: undefined, to: undefined } : {}),
@@ -128,6 +158,14 @@ export function ReportWorkspace({
         : { period: { kind: mode, months } }),
     groupBy,
     interval,
+    selection,
+    compare: true,
+  };
+  const payload = JSON.stringify(request);
+  const chartPayload = JSON.stringify({
+    ...request,
+    selection: undefined,
+    groupBy: undefined,
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: retry explicitly reloads the current financial report.
   useEffect(() => {
@@ -151,6 +189,7 @@ export function ReportWorkspace({
         )
           throw new Error('dataset_changed');
         setData(result);
+        setLoadedRequest({ chart: chartPayload, scope: payload });
         setTaxonomy(catalog);
       })
       .catch((error) => {
@@ -163,7 +202,7 @@ export function ReportWorkspace({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [payload, settings.datasetId, retry]);
+  }, [payload, chartPayload, settings.datasetId, retry]);
   const t = (key: Parameters<typeof message>[0]) => message(key, locale);
   const money = (amount: number) =>
     displayMoney(amount, settings.primaryCurrency, locale);
@@ -174,17 +213,22 @@ export function ReportWorkspace({
   const apply = (next: EntryFilters) => {
     setFilters(next);
     setMode('custom');
+    setSelection(undefined);
+    setExpanded(undefined);
   };
   const formFilters = {
     ...filters,
     ...(mode !== 'custom' && data
-      ? { from: data.filters.from, to: data.filters.to }
+      ? { from: data.range.from, to: data.range.to }
       : {}),
   };
-  const groups =
-    data?.groups.filter(
-      (group) => group.counts.expense || group.counts.refund
-    ) ?? [];
+  const rankedKind =
+    filters.kind === 'income'
+      ? 'income'
+      : filters.kind === 'refund'
+        ? 'refund'
+        : 'expense';
+  const groups = data?.groups.filter((group) => group.counts[rankedKind]) ?? [];
   const peak = Math.max(
     1,
     ...(data?.trend.flatMap((bucket) => [
@@ -192,7 +236,32 @@ export function ReportWorkspace({
       bucket.totals.refund,
     ]) ?? [])
   );
-  const visible = !loading && !failure ? data : null;
+  const visible =
+    !loading && !failure && loadedRequest?.scope === payload ? data : null;
+  const chart = !failure && loadedRequest?.chart === chartPayload ? data : null;
+  const selectPeriod = (period?: { from: string; to: string }) => {
+    setSelection(period);
+    setExpanded(undefined);
+  };
+  useEffect(() => {
+    const revealSelection = () => {
+      const scroller = chartScroller.current;
+      const button = scroller?.querySelector<HTMLElement>(
+        'button[aria-pressed="true"]'
+      );
+      if (!scroller || !button) return;
+      const bounds = scroller.getBoundingClientRect();
+      const selected = button.getBoundingClientRect();
+      if (selected.left < bounds.left || selected.right > bounds.right)
+        scroller.scrollLeft +=
+          selected.left -
+          bounds.left -
+          (scroller.clientWidth - selected.width) / 2;
+    };
+    if (chart) revealSelection();
+    window.addEventListener('resize', revealSelection);
+    return () => window.removeEventListener('resize', revealSelection);
+  }, [chart]);
   return (
     <div className="space-y-6 md:space-y-8">
       <header className="flex items-start justify-between gap-4">
@@ -229,6 +298,7 @@ export function ReportWorkspace({
               className="w-full! max-w-full md:w-auto!"
               value={mode}
               onValueChange={(next) => {
+                selectPeriod();
                 if (next === 'custom') {
                   setFilters(formFilters);
                   setFiltersOpen(true);
@@ -252,13 +322,19 @@ export function ReportWorkspace({
                   className="shrink-0 border-0! bg-transparent!"
                   aria-label={t('report_previous_month')}
                   disabled={month <= '1900-01'}
-                  onClick={() => setMonth(shiftMonth(month, -1))}
+                  onClick={() => {
+                    selectPeriod();
+                    setMonth(shiftMonth(month, -1));
+                  }}
                 >
                   <IconChevronLeft aria-hidden size={19} />
                 </Button>
                 <ReportMonthPicker
                   value={month}
-                  onChange={setMonth}
+                  onChange={(next) => {
+                    selectPeriod();
+                    setMonth(next);
+                  }}
                   locale={locale}
                 />
                 <Button
@@ -266,7 +342,10 @@ export function ReportWorkspace({
                   className="shrink-0 border-0! bg-transparent!"
                   aria-label={t('report_next_month')}
                   disabled={month >= '9999-12'}
-                  onClick={() => setMonth(shiftMonth(month, 1))}
+                  onClick={() => {
+                    selectPeriod();
+                    setMonth(shiftMonth(month, 1));
+                  }}
                 >
                   <IconChevronRight aria-hidden size={19} />
                 </Button>
@@ -278,7 +357,10 @@ export function ReportWorkspace({
                 <Select
                   label={t('report_month_count')}
                   value={months}
-                  onValueChange={setMonths}
+                  onValueChange={(next) => {
+                    selectPeriod();
+                    setMonths(next);
+                  }}
                   items={[...new Set([1, 3, 6, 12, months])]
                     .sort((a, b) => a - b)
                     .map((value) => ({ value, label: String(value) }))}
@@ -316,17 +398,6 @@ export function ReportWorkspace({
           )}
         </Collapsible.Panel>
       </Collapsible.Root>
-      {visible && (
-        <p
-          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground tabular-nums"
-          aria-live="polite"
-        >
-          <span className="font-bold text-foreground">
-            {visible.filters.from} — {visible.filters.to}
-          </span>
-          <span>· {visible.timeZone}</span>
-        </p>
-      )}
       {failure ? (
         <div className="rounded-2xl border border-orange/40 bg-orange/5 p-6">
           <p role="alert" className="mb-4">
@@ -343,13 +414,33 @@ export function ReportWorkspace({
       ) : (
         <>
           <section aria-label={t('query_totals')} aria-busy={loading}>
+            {visible && (
+              <p
+                className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground tabular-nums"
+                aria-live="polite"
+              >
+                {selection && <span>{t('report_selected_period')}</span>}
+                <span className="font-bold text-foreground">
+                  {visible.filters.from} — {visible.filters.to}
+                </span>
+                <span>· {visible.timeZone}</span>
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               {metrics.map(({ key, label, Icon, color }) =>
                 visible ? (
                   <Link
                     key={key}
                     to="/"
-                    search={{ view: 'entries', filters: visible.filters }}
+                    search={{
+                      view: 'entries',
+                      filters: {
+                        ...visible.filters,
+                        kind: key === 'netExpense' ? 'spending' : key,
+                        sort: 'amount_desc',
+                        page: 1,
+                      },
+                    }}
                     className={`group relative min-w-0 rounded-2xl border p-4 outline-none transition-colors hover:border-orange/60 focus-visible:ring-4 focus-visible:ring-focus md:p-5 ${key === 'netExpense' ? 'border-orange/35 bg-orange/10' : 'border-foreground/10 bg-surface'}`}
                   >
                     <dl>
@@ -382,6 +473,16 @@ export function ReportWorkspace({
                           className="shrink-0 opacity-50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
                         />
                       </dd>
+                      {visible.comparison && (
+                        <dd className="mt-2">
+                          <ReportDelta
+                            current={visible.totals[key]}
+                            previous={visible.comparison.previous.totals[key]}
+                            format={money}
+                            locale={locale}
+                          />
+                        </dd>
+                      )}
                     </dl>
                   </Link>
                 ) : (
@@ -419,6 +520,13 @@ export function ReportWorkspace({
               </div>
             )}
           </section>
+          {visible && (
+            <ReportComparisonSummary
+              data={visible}
+              kind={rankedKind}
+              locale={locale}
+            />
+          )}
           {loading && (
             <output className="sr-only">{t('report_loading')}</output>
           )}
@@ -457,7 +565,10 @@ export function ReportWorkspace({
           <SegmentedControl
             label={t('report_interval')}
             value={interval}
-            onValueChange={setInterval}
+            onValueChange={(next) => {
+              selectPeriod();
+              setInterval(next);
+            }}
             items={[
               { value: 'day', label: t('report_daily') },
               { value: 'week', label: t('report_weekly') },
@@ -465,10 +576,12 @@ export function ReportWorkspace({
             ]}
           />
         </div>
-        {visible ? (
+        {chart ? (
           <>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground md:text-sm">
-              <span>{visible.primaryCurrency}</span>
+              <span>
+                {chart.primaryCurrency} · {chart.range.from} — {chart.range.to}
+              </span>
               <p className="flex gap-4">
                 <span className="flex items-center gap-2">
                   <span className="size-2.5 rounded-sm bg-orange" />
@@ -480,7 +593,28 @@ export function ReportWorkspace({
                 </span>
               </p>
             </div>
-            {visible.counts.expense || visible.counts.refund ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {t('report_chart_hint')}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/35 px-3 py-2">
+              <output className="text-sm font-bold tabular-nums">
+                {selection
+                  ? `${t('report_selected_period')} ${selection.from} — ${selection.to}`
+                  : t('report_entire_period')}
+              </output>
+              {selection && (
+                <Button
+                  variant="plain"
+                  className="min-h-10! border-foreground/15! px-3! text-xs!"
+                  onClick={() => selectPeriod()}
+                >
+                  {t('report_clear_selection')}
+                </Button>
+              )}
+            </div>
+            {chart.trend.some(
+              (bucket) => bucket.counts.expense || bucket.counts.refund
+            ) ? (
               <div className="mt-7 flex min-w-0 gap-2 md:gap-4">
                 <div
                   aria-hidden
@@ -496,17 +630,17 @@ export function ReportWorkspace({
                   ))}
                 </div>
                 <section
+                  ref={chartScroller}
                   // biome-ignore lint/a11y/noNoninteractiveTabindex: The scrollable chart needs keyboard access on narrow screens.
                   tabIndex={0}
                   aria-label={t('report_trend')}
-                  className="min-w-0 flex-1 overflow-x-auto rounded outline-none focus-visible:ring-4 focus-visible:ring-focus"
+                  className="min-w-0 flex-1 overflow-x-auto rounded p-1 outline-none focus-visible:ring-4 focus-visible:ring-focus"
                 >
-                  <div
-                    className="relative pt-6"
+                  <fieldset
+                    className="relative min-w-0 pt-6"
                     style={{
-                      minWidth: Math.max(210, visible.trend.length * 90),
+                      minWidth: Math.max(210, chart.trend.length * 90),
                     }}
-                    role="img"
                     aria-label={t('report_chart_alternative')}
                   >
                     <div className="pointer-events-none absolute inset-x-0 top-6 flex h-52 flex-col justify-between">
@@ -518,41 +652,63 @@ export function ReportWorkspace({
                       ))}
                     </div>
                     <div className="relative flex gap-4">
-                      {visible.trend.map((bucket) => (
-                        <div
-                          key={bucket.from}
-                          className="min-w-0 flex-1 text-center"
-                        >
-                          <div className="flex h-52 items-end justify-center gap-2 md:gap-3">
-                            {(['expense', 'refund'] as const).map((kind) => (
-                              <div
-                                key={kind}
-                                className={`relative w-[22%] max-w-14 rounded-t-md ${kind === 'expense' ? 'bg-orange' : 'bg-yellow'}`}
-                                style={{
-                                  height: `${(bucket.totals[kind] / peak) * 100}%`,
-                                }}
+                      {chart.trend.map((bucket) => {
+                        const selected =
+                          selection?.from === bucket.from &&
+                          selection?.to === bucket.to;
+                        return (
+                          <Button
+                            key={bucket.from}
+                            variant="plain"
+                            aria-label={`${t('report_select_period')} ${bucket.from} — ${bucket.to}`}
+                            aria-pressed={selected}
+                            onClick={() =>
+                              selectPeriod(
+                                selected
+                                  ? undefined
+                                  : { from: bucket.from, to: bucket.to }
+                              )
+                            }
+                            className="group min-w-0 flex-1 flex-col! justify-end! gap-0! rounded-lg! border-0! bg-transparent! px-1! py-0! text-center shadow-none! hover:bg-muted/20!"
+                          >
+                            <span
+                              className="flex h-52 w-full items-end justify-center gap-2 md:gap-3"
+                              aria-hidden
+                            >
+                              {(['expense', 'refund'] as const).map((kind) => (
+                                <span
+                                  key={kind}
+                                  className={`relative w-[22%] max-w-14 rounded-t-md ${kind === 'expense' ? (selected ? 'bg-orange-strong' : selection ? 'bg-orange/45' : 'bg-orange') : selection && !selected ? 'bg-yellow/50' : 'bg-yellow'}`}
+                                  style={{
+                                    height: `${(bucket.totals[kind] / peak) * 100}%`,
+                                  }}
+                                >
+                                  {bucket.totals[kind] > 0 && (
+                                    <span className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 text-xs font-bold tabular-nums">
+                                      {decimalAmount(
+                                        bucket.totals[kind],
+                                        settings.primaryCurrency
+                                      ).replace(/\.0+$/, '')}
+                                    </span>
+                                  )}
+                                </span>
+                              ))}
+                            </span>
+                            <span className="flex min-h-12 items-center justify-center py-2 text-[11px] tabular-nums md:text-xs">
+                              <span
+                                className={`whitespace-nowrap rounded-md border-b-2 px-1 py-1 ${selected ? 'border-orange bg-orange/10 font-bold text-foreground' : 'border-transparent font-normal text-muted-foreground'}`}
                               >
-                                {bucket.totals[kind] > 0 && (
-                                  <span className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 text-xs font-bold tabular-nums">
-                                    {decimalAmount(
-                                      bucket.totals[kind],
-                                      settings.primaryCurrency
-                                    ).replace(/\.0+$/, '')}
-                                  </span>
+                                {bucket.from.slice(5)}
+                                {bucket.from !== bucket.to && (
+                                  <> — {bucket.to.slice(5)}</>
                                 )}
-                              </div>
-                            ))}
-                          </div>
-                          <p className="pt-3 pb-2 text-[11px] text-muted-foreground tabular-nums md:text-xs">
-                            {bucket.from.slice(5)}
-                            {bucket.from !== bucket.to && (
-                              <> — {bucket.to.slice(5)}</>
-                            )}
-                          </p>
-                        </div>
-                      ))}
+                              </span>
+                            </span>
+                          </Button>
+                        );
+                      })}
                     </div>
-                  </div>
+                  </fieldset>
                 </section>
               </div>
             ) : (
@@ -590,7 +746,7 @@ export function ReportWorkspace({
                       </tr>
                     </thead>
                     <tbody>
-                      {visible.trend.map((bucket) => (
+                      {chart.trend.map((bucket) => (
                         <tr
                           key={bucket.from}
                           className="border-t border-foreground/10"
@@ -600,7 +756,10 @@ export function ReportWorkspace({
                               to="/"
                               search={{
                                 view: 'entries',
-                                filters: bucket.filters,
+                                filters: {
+                                  ...bucket.filters,
+                                  sort: 'amount_desc',
+                                },
                               }}
                               className="inline-flex min-h-11 items-center whitespace-nowrap rounded-lg px-1 underline decoration-foreground/30 underline-offset-4 outline-none hover:text-orange-strong focus-visible:ring-4 focus-visible:ring-focus"
                             >
@@ -631,119 +790,238 @@ export function ReportWorkspace({
           />
         ) : null}
       </section>
+      <ReportChanges
+        data={visible}
+        kind={rankedKind}
+        locale={locale}
+        currency={settings.primaryCurrency}
+        loading={loading}
+        direction={changeDirection}
+        onDirectionChange={setChangeDirection}
+      />
       <section
-        className="rounded-2xl border border-foreground/10 bg-surface p-4 md:p-6"
+        className="min-w-0 rounded-2xl border border-foreground/10 bg-surface p-4 md:p-6"
         aria-labelledby="report-groups-title"
         aria-busy={loading}
       >
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 id="report-groups-title" className="text-lg font-extrabold">
-            {t('report_distribution')}
+            {t(
+              rankedKind === 'income'
+                ? 'report_income_ranking'
+                : rankedKind === 'refund'
+                  ? 'report_refund_ranking'
+                  : 'report_distribution'
+            )}
           </h2>
           <SegmentedControl
             label={t('report_group_by')}
-            value={groupBy}
-            onValueChange={setGroupBy}
+            value={ranking}
+            onValueChange={(next) => {
+              setRanking(next);
+              setExpanded(undefined);
+            }}
             items={[
               { value: 'category', label: t('entry_category') },
               { value: 'tag', label: t('entry_tags') },
+              { value: 'entries', label: t('report_individual_entries') },
             ]}
           />
         </div>
-        {groupBy === 'tag' && (
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          {t('report_rank_basis')} · {settings.primaryCurrency}
+        </p>
+        {visible && (
+          <p className="mt-2 text-sm font-bold tabular-nums">
+            {visible.filters.from} — {visible.filters.to}
+          </p>
+        )}
+        {ranking === 'tag' && (
           <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground">
             {t('report_tags_overlap')}
           </p>
         )}
         {visible ? (
           <>
-            <ul className="mt-5 divide-y divide-foreground/10">
-              {groups.map((group) => {
-                const CategoryIcon =
-                  groupBy === 'tag'
-                    ? IconTag
-                    : group.categoryKey === 'expense-food'
-                      ? IconToolsKitchen2
-                      : group.categoryKey === 'expense-sports'
-                        ? IconRun
-                        : group.categoryKey === 'expense-clothing'
-                          ? IconHanger
-                          : IconWallet;
-                const share = visible.totals.expense
-                  ? group.totals.expense / visible.totals.expense
-                  : 0;
-                return (
-                  <li key={group.id ?? 'untagged'}>
-                    <Link
-                      to="/"
-                      search={{ view: 'entries', filters: group.filters }}
-                      className="group flex min-w-0 gap-3 rounded-xl py-5 outline-none hover:bg-muted/30 focus-visible:ring-4 focus-visible:ring-focus md:gap-4 md:px-2"
-                    >
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange/10 text-foreground md:size-12">
-                        <CategoryIcon size={22} aria-hidden />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
-                          <span className="min-w-0 break-words font-bold">
-                            {label(group)}
-                            <span className="text-sm font-normal text-muted-foreground">
-                              {' '}
-                              · {group.total} {t('report_records')}
+            {ranking === 'entries' ? (
+              <ReportEntryRanking
+                key={`${payload}:${retry}`}
+                filters={visible.filters}
+                revision={visible.revision}
+                settings={settings}
+                locale={locale}
+                onRefresh={() => setRetry((value) => value + 1)}
+              />
+            ) : (
+              <ol
+                className="mt-4 divide-y divide-foreground/10"
+                aria-label={t(
+                  ranking === 'tag'
+                    ? 'report_tag_ranking'
+                    : 'report_category_ranking'
+                )}
+              >
+                {groups.map((group, index) => {
+                  const groupId = group.id ?? 'untagged';
+                  const previous = visible.comparison?.groups.find(
+                    (item) => item.id === group.id
+                  )?.previous;
+                  const average = averageMinor(
+                    group.totals[rankedKind],
+                    group.counts[rankedKind]
+                  );
+                  const share = visible.totals[rankedKind]
+                    ? group.totals[rankedKind] / visible.totals[rankedKind]
+                    : 0;
+                  return (
+                    <li key={groupId}>
+                      <Collapsible.Root
+                        open={expanded === groupId}
+                        onOpenChange={(open) =>
+                          setExpanded(open ? groupId : undefined)
+                        }
+                      >
+                        <Collapsible.Trigger
+                          render={<Button variant="plain" />}
+                          className="group flex w-full items-start! justify-start! gap-3! rounded-xl! border-0! bg-transparent! px-1! py-5! text-left shadow-none! hover:bg-muted/30! md:gap-4! md:px-2!"
+                        >
+                          <span
+                            aria-hidden
+                            className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-extrabold tabular-nums ${index < 3 ? 'bg-yellow/35' : 'bg-muted text-muted-foreground'}`}
+                          >
+                            #{index + 1}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
+                              <span className="min-w-0 break-words font-bold">
+                                {label(group)}
+                                <span className="text-sm font-normal text-muted-foreground">
+                                  {' '}
+                                  · {group.counts[rankedKind]}{' '}
+                                  {t('report_records')}
+                                </span>
+                              </span>
+                              <span className="text-lg font-extrabold tabular-nums">
+                                {money(group.totals[rankedKind])}
+                              </span>
+                            </span>
+                            <span className="mt-2 block text-xs font-normal text-muted-foreground">
+                              {t('report_average')}{' '}
+                              {average === null ? '—' : money(average)}
+                            </span>
+                            {previous && (
+                              <span className="mt-1 block">
+                                <ReportDelta
+                                  current={group.totals[rankedKind]}
+                                  previous={previous.totals[rankedKind]}
+                                  format={money}
+                                  locale={locale}
+                                />
+                                <span className="ms-2 text-xs font-normal text-muted-foreground">
+                                  {t('report_count_change')}{' '}
+                                  {group.counts[rankedKind] -
+                                    previous.counts[rankedKind] >
+                                  0
+                                    ? '+'
+                                    : ''}
+                                  {group.counts[rankedKind] -
+                                    previous.counts[rankedKind]}{' '}
+                                  {t('report_records')}
+                                </span>
+                              </span>
+                            )}
+                            <span className="mt-3 flex items-center gap-3">
+                              <span
+                                className="h-2 flex-1 overflow-hidden rounded-full bg-muted/60"
+                                aria-hidden
+                              >
+                                <span
+                                  className="block h-full rounded-full bg-orange"
+                                  style={{ width: `${share * 100}%` }}
+                                />
+                              </span>
+                              <span className="min-w-12 text-right text-xs font-normal text-muted-foreground tabular-nums">
+                                {new Intl.NumberFormat(locale, {
+                                  style: 'percent',
+                                  maximumFractionDigits: 1,
+                                }).format(share)}
+                              </span>
+                            </span>
+                            {rankedKind === 'expense' &&
+                              group.counts.refund > 0 && (
+                                <span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-normal text-muted-foreground">
+                                  <span>
+                                    {t('query_refund')}{' '}
+                                    {money(group.totals.refund)}
+                                  </span>
+                                  <span>
+                                    {t('query_net_expense')}{' '}
+                                    {money(group.totals.netExpense)}
+                                  </span>
+                                </span>
+                              )}
+                            <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground">
+                              {t(
+                                expanded === groupId
+                                  ? 'report_collapse_entries'
+                                  : 'report_expand_entries'
+                              )}
+                              <IconChevronDown
+                                size={14}
+                                aria-hidden
+                                className={`transition-transform ${expanded === groupId ? 'rotate-180' : ''}`}
+                              />
                             </span>
                           </span>
-                          <span className="font-extrabold tabular-nums">
-                            {money(group.totals.expense)}
-                          </span>
-                        </div>
-                        <div className="mt-3 flex items-center gap-3">
-                          <div
-                            className="h-2 flex-1 overflow-hidden rounded-full bg-muted/60"
-                            aria-hidden
+                        </Collapsible.Trigger>
+                        <Collapsible.Panel className="mb-4 rounded-xl border border-foreground/10 bg-background/60 p-3 md:ms-14 md:p-4">
+                          <h3 className="text-sm font-extrabold">
+                            {label(group)} · {t('report_entry_ranking')}
+                          </h3>
+                          <ReportEntryRanking
+                            key={`${payload}:${retry}:${groupId}`}
+                            filters={group.filters}
+                            revision={visible.revision}
+                            settings={settings}
+                            locale={locale}
+                            onRefresh={() => setRetry((value) => value + 1)}
+                          />
+                          <Link
+                            to="/"
+                            search={{
+                              view: 'entries',
+                              filters: {
+                                ...group.filters,
+                                sort: 'amount_desc',
+                              },
+                            }}
+                            className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-bold underline decoration-foreground/30 underline-offset-4 outline-none hover:text-orange-strong focus-visible:ring-4 focus-visible:ring-focus"
                           >
-                            <div
-                              className="h-full rounded-full bg-orange"
-                              style={{ width: `${share * 100}%` }}
-                            />
-                          </div>
-                          <span className="min-w-12 text-right text-xs text-muted-foreground tabular-nums">
-                            {new Intl.NumberFormat(locale, {
-                              style: 'percent',
-                              maximumFractionDigits: 1,
-                            }).format(share)}
-                          </span>
-                        </div>
-                        <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground md:text-sm">
-                          <span>
-                            {t('query_refund')} {money(group.totals.refund)}
-                          </span>
-                          <span>
-                            {t('query_net_expense')}{' '}
-                            {money(group.totals.netExpense)}
-                          </span>
-                        </p>
-                      </div>
-                      <IconChevronRight
-                        size={18}
-                        aria-hidden
-                        className="mt-1 hidden shrink-0 self-center text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:block"
-                      />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            {!groups.length && (
+                            {label(group)} · {group.total} {t('report_records')}
+                            <IconArrowUpRight aria-hidden size={16} />
+                          </Link>
+                        </Collapsible.Panel>
+                      </Collapsible.Root>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            {ranking !== 'entries' && !groups.length && (
               <p className="py-10 text-center text-sm text-muted-foreground">
-                {t('report_no_expenses')}
+                {t('report_no_ranked_entries')}
               </p>
             )}
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-4 border-t border-foreground/10 pt-5">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-foreground/10 pt-5">
               <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground md:text-sm">
                 {t('report_refund_date')}
               </p>
               <Link
                 to="/"
-                search={{ view: 'entries', filters: visible.filters }}
+                search={{
+                  view: 'entries',
+                  filters: { ...visible.filters, sort: 'amount_desc' },
+                }}
                 className={buttonVariants({
                   variant: 'plain',
                   className: 'w-full border-foreground/15! text-sm sm:w-auto',

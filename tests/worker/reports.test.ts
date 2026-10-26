@@ -119,6 +119,356 @@ const entries = async (filters: unknown) =>
   (await api('entries/query', filters)).json<EntryPage>();
 
 describe('protected shared financial reports', () => {
+  it('compares equal weekly progress, retains disappeared and new groups, and preserves fixed currency/refund rules', async () => {
+    for (const [amount, date] of [
+      ['60', '2026-10-20'],
+      ['40', '2026-10-21'],
+      ['30', '2026-10-13'],
+      ['20', '2026-10-14'],
+    ])
+      await create({ amount, date, tags: ['Delivery', 'Shared'] });
+    await create({
+      amount: '10',
+      date: '2026-10-20',
+      currency: 'USD',
+      conversion: { rate: '7.00' },
+      confirmedBaseMinor: 7000,
+      categoryId: 'expense-other',
+      tags: ['Promotion', 'Shared'],
+    });
+    await create({
+      amount: '10',
+      date: '2026-10-13',
+      currency: 'USD',
+      conversion: { rate: '8.00' },
+      confirmedBaseMinor: 8000,
+      categoryId: 'expense-other',
+      tags: ['Retired'],
+    });
+    await create({
+      amount: '25',
+      date: '2026-10-21',
+      categoryId: 'expense-sports',
+      tags: ['New'],
+    });
+    await create({
+      amount: '90',
+      date: '2026-10-14',
+      categoryId: 'expense-clothing',
+      tags: ['Old'],
+    });
+    const original = await create({
+      amount: '500',
+      date: '2026-09-20',
+      categoryId: 'expense-home',
+      tags: [],
+    });
+    await refund(original, {
+      amount: '10',
+      date: '2026-10-22',
+      confirmedBaseMinor: 1000,
+    });
+    await refund(original, {
+      amount: '20',
+      date: '2026-10-15',
+      confirmedBaseMinor: 2000,
+    });
+    await create({
+      amount: '2000',
+      date: '2026-10-20',
+      kind: 'income',
+      categoryId: 'income-salary',
+      tags: [],
+    });
+    await create({
+      amount: '1000',
+      date: '2026-10-13',
+      kind: 'income',
+      categoryId: 'income-salary',
+      tags: [],
+    });
+    const deleted = await create({ amount: '999', date: '2026-10-13' });
+    expect(
+      (
+        await api('entries/delete', {
+          ...command(),
+          id: deleted,
+          version: 1,
+          confirmed: true,
+        })
+      ).status
+    ).toBe(200);
+    const query = {
+      filters: { from: '2026-10-01', to: '2026-10-31' },
+      selection: { from: '2026-10-19', to: '2026-10-25' },
+      interval: 'week',
+      compare: true,
+    };
+    const data = await report(query);
+    expect(data.totals).toEqual({
+      income: 200000,
+      expense: 19500,
+      refund: 1000,
+      netExpense: 18500,
+    });
+    expect(data.comparison?.filters).toMatchObject({
+      from: '2026-10-12',
+      to: '2026-10-18',
+    });
+    expect(data.comparison?.previous.totals).toEqual({
+      income: 100000,
+      expense: 22000,
+      refund: 2000,
+      netExpense: 20000,
+    });
+    expect(data.comparison?.previous.counts.expense).toBe(4);
+    const changed = data.comparison?.groups ?? [];
+    expect(changed.find((g) => g.id === 'expense-food')).toMatchObject({
+      counts: { expense: 2 },
+      totals: { expense: 10000 },
+      previous: { counts: { expense: 2 }, totals: { expense: 5000 } },
+    });
+    expect(changed.find((g) => g.id === 'expense-sports')?.previous.total).toBe(
+      0
+    );
+    expect(changed.find((g) => g.id === 'expense-clothing')).toMatchObject({
+      total: 0,
+      previous: { totals: { expense: 9000 } },
+    });
+    for (const group of changed) {
+      expect((await entries(group.filters)).totals).toEqual(group.totals);
+      expect(
+        (
+          await entries({
+            ...group.filters,
+            from: data.comparison?.filters.from,
+            to: data.comparison?.filters.to,
+          })
+        ).totals
+      ).toEqual(group.previous.totals);
+    }
+    const usd = await report({
+      ...query,
+      filters: { ...query.filters, currency: 'USD' },
+    });
+    expect(usd.originalTotals?.expense).toBe(1000);
+    expect(usd.comparison?.previous.originalTotals?.expense).toBe(1000);
+    expect([
+      usd.totals.expense,
+      usd.comparison?.previous.totals.expense,
+    ]).toEqual([7000, 8000]);
+    const tags = await report({ ...query, groupBy: 'tag' });
+    expect(tags.totals).toEqual(data.totals);
+    const shared = tags.comparison?.groups.find((g) => g.name === 'Shared');
+    expect(shared).toMatchObject({
+      totals: { expense: 17000 },
+      previous: { totals: { expense: 5000 } },
+    });
+    if (!shared?.id) throw new Error('Missing shared fixture tag');
+    const narrowed = await report({
+      ...query,
+      filters: { ...query.filters, requiredTagIds: [shared.id] },
+      groupBy: 'tag',
+    });
+    expect([
+      narrowed.totals.expense,
+      narrowed.comparison?.previous.totals.expense,
+    ]).toEqual([17000, 5000]);
+    expect(
+      (await report({ ...query, compare: undefined })).comparison
+    ).toBeUndefined();
+    const partial = await report({
+      ...query,
+      selection: { from: '2026-10-19', to: '2026-10-20' },
+    });
+    expect(partial.comparison?.filters).toMatchObject({
+      from: '2026-10-12',
+      to: '2026-10-13',
+    });
+    const first = await report({
+      filters: {},
+      period: { kind: 'month', month: '1900-01' },
+      compare: true,
+    });
+    expect(first.comparison).toBeNull();
+  });
+
+  it('returns real zero-record comparisons without losing prior-only spending and rejects unsupported comparison input', async () => {
+    await create({ date: '2024-02-29', amount: '25' });
+    const data = await report({
+      filters: {},
+      period: { kind: 'month', month: '2024-03' },
+      compare: true,
+    });
+    expect(data.comparison?.filters).toMatchObject({
+      from: '2024-02-01',
+      to: '2024-02-29',
+    });
+    expect(data.counts.expense).toBe(0);
+    expect(data.comparison?.previous.counts.expense).toBe(1);
+    expect(data.comparison?.groups[0]).toMatchObject({
+      total: 0,
+      previous: { totals: { expense: 2500 } },
+    });
+    const empty = await report({
+      filters: {},
+      period: { kind: 'month', month: '2024-01' },
+      compare: true,
+    });
+    expect(empty.comparison?.previous.total).toBe(0);
+    expect(empty.comparison?.groups).toEqual([]);
+    expect((await api('reports/query', { compare: 'yes' })).status).toBe(400);
+  });
+
+  it('ranks the selected chart period by confirmed primary amounts with stable pages, notes, tags and exports', async () => {
+    const small = await create({
+      name: 'Small synthetic meal',
+      amount: '100',
+      date: '2024-03-05',
+      tags: ['Meals', 'Shared'],
+    });
+    const foreign = await create({
+      name: 'Foreign synthetic campaign',
+      amount: '20',
+      currency: 'USD',
+      conversion: { rate: '7.20' },
+      confirmedBaseMinor: 14400,
+      date: '2024-03-06',
+      categoryId: 'expense-other',
+      tags: ['Promotion', 'Shared'],
+      note: 'Synthetic campaign details',
+    });
+    const tied = await create({
+      name: 'Synthetic groceries',
+      amount: '144',
+      date: '2024-03-06',
+      tags: ['Meals', 'Shared'],
+    });
+    await create({
+      name: 'Outside selected week',
+      amount: '200',
+      date: '2024-03-12',
+    });
+    await create({
+      kind: 'income',
+      amount: '5000',
+      categoryId: 'income-salary',
+      date: '2024-03-06',
+      tags: [],
+    });
+    const deleted = await create({ amount: '999', date: '2024-03-06' });
+    expect(
+      (
+        await api('entries/delete', {
+          ...command(),
+          id: deleted,
+          version: 1,
+          confirmed: true,
+        })
+      ).status
+    ).toBe(200);
+    const selection = { from: '2024-03-04', to: '2024-03-10' };
+    const data = await report({ selection });
+    expect(data.range).toEqual(range);
+    expect(data.filters).toMatchObject(selection);
+    expect(data.totals.expense).toBe(38800);
+    expect(
+      data.groups
+        .filter((g) => g.counts.expense)
+        .map((g) => [g.name, g.totals.expense])
+    ).toEqual([
+      ['饮食', 24400],
+      ['其他', 14400],
+    ]);
+    expect(
+      data.trend.some(
+        (bucket) =>
+          bucket.from === '2024-03-11' && bucket.totals.expense === 20000
+      )
+    ).toBe(true);
+    const filters = {
+      ...data.filters,
+      kind: 'expense',
+      sort: 'amount_desc',
+      pageSize: 2,
+    };
+    const first = await entries(filters);
+    const second = await entries({ ...filters, page: 2 });
+    const expected = [...[foreign, tied].sort().reverse(), small];
+    expect([...first.items, ...second.items].map((e) => e.id)).toEqual(
+      expected
+    );
+    expect([first.total, first.pageCount, first.totals.expense]).toEqual([
+      3, 2, 38800,
+    ]);
+    expect(first.items.find((e) => e.id === foreign)).toMatchObject({
+      originalMinor: 2000,
+      baseMinor: 14400,
+      note: 'Synthetic campaign details',
+    });
+    const csvResponse = await api('exports/csv', { datasetId, filters });
+    expect(csvResponse.status).toBe(200);
+    expect(
+      (await csvResponse.text())
+        .trim()
+        .split('\r\n')
+        .slice(1)
+        .map((line) => line.split(',')[0])
+    ).toEqual(expected.map((id) => `"${id}"`));
+    const tags = await report({ selection, groupBy: 'tag' });
+    expect(
+      tags.groups
+        .filter((g) => g.counts.expense)
+        .map((g) => [g.name, g.totals.expense])
+    ).toEqual([
+      ['Shared', 38800],
+      ['Meals', 24400],
+      ['Promotion', 14400],
+    ]);
+    for (const group of [...data.groups, ...tags.groups]) {
+      const detail = await entries({ ...group.filters, sort: 'amount_desc' });
+      expect(detail.totals).toEqual(group.totals);
+      expect(
+        detail.items.every(
+          (e) => e.date >= selection.from && e.date <= selection.to
+        )
+      ).toBe(true);
+    }
+    expect((await entries({ kind: 'expense' })).items[0].name).toBe(
+      'Outside selected week'
+    );
+  });
+
+  it('keeps refund-only selections and day/month drilldowns independent from the full trend', async () => {
+    const id = await create();
+    await refund(id);
+    for (const interval of ['day', 'week', 'month']) {
+      const full = await report({ interval });
+      const bucket = full.trend.find((b) => b.totals.refund > 0);
+      if (!bucket) throw new Error('Missing refund bucket');
+      const selected = await report({
+        interval,
+        selection: { from: bucket.from, to: bucket.to },
+      });
+      expect(selected.totals).toEqual(bucket.totals);
+      expect(selected.trend).toEqual(full.trend);
+      expect(selected.totals.netExpense).toBe(-3000);
+      expect(
+        (
+          await entries({
+            ...selected.filters,
+            kind: 'expense',
+            sort: 'amount_desc',
+          })
+        ).items
+      ).toEqual([]);
+    }
+    expect(
+      (await report({ selection: { from: '2024-03-20', to: '2024-03-20' } }))
+        .total
+    ).toBe(0);
+  });
+
   it('counts fixed primary amounts, separate dated refunds, categories and inclusive weekly drilldowns from the same filters', async () => {
     const id = await create();
     await refund(id);
@@ -323,6 +673,12 @@ describe('protected shared financial reports', () => {
       { groupBy: 'note' },
       { interval: 'hour' },
       { filters: { untagged: 'true' } },
+      { filters: range, selection: { from: '2024-02-29', to: '2024-03-05' } },
+      { filters: range, selection: { from: '2024-03-01', to: '2024-05-01' } },
+      { selection: { from: '2024-03-10', to: '2024-03-01' } },
+      { selection: { from: '2024-02-30', to: '2024-03-01' } },
+      { selection: { from: '2024-03-01', to: '2024-03-10', sql: 'select *' } },
+      { filters: { sort: 'base_minor; DELETE FROM entries' } },
     ])
       expect((await api('reports/query', body)).status).toBe(400);
     expect(

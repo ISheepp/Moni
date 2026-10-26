@@ -10,7 +10,10 @@ import {
   it,
   vi,
 } from 'vitest';
-import { resolveQueryPeriod } from '../../src/ledger/chat-query';
+import {
+  refreshLedgerQuery,
+  resolveQueryPeriod,
+} from '../../src/ledger/chat-query';
 import {
   type LedgerQueryInput,
   type LedgerQueryResult,
@@ -261,6 +264,7 @@ describe('restricted natural-language queries through protected D1/DO chat', () 
       expect(stream).toContain('¥70.00');
       expect(stream).toContain('没有新增、修改或入账');
       expect(stream).not.toContain('没有待确认草稿');
+      expect(stream).not.toContain('对比上期');
     }
     expect(modelCalls).toBe(calls);
     expect(await (await api('entries')).json()).toHaveLength(2);
@@ -303,7 +307,7 @@ describe('restricted natural-language queries through protected D1/DO chat', () 
       report: { total: 1, totals: { expense: 3500 } },
       entries: {
         page: 1,
-        pageSize: 5,
+        pageSize: 20,
         pageCount: 1,
         items: [
           {
@@ -331,12 +335,12 @@ describe('restricted natural-language queries through protected D1/DO chat', () 
 
   it('paginates current details, resets page for new conditions and bounds notes without changing full stored notes', async () => {
     const fullNote = '肯德基'.repeat(200);
-    for (let i = 0; i < 6; i++)
+    for (let i = 0; i < 21; i++)
       await entry({ name: `分页合成${i}`, note: fullNote });
     const thread = await createThread();
     const first = await ask(thread, { ...query(), view: 'entries' });
     expect(first.latest?.entries).toMatchObject({ page: 1, pageCount: 2 });
-    expect(first.latest?.entries?.items).toHaveLength(5);
+    expect(first.latest?.entries?.items).toHaveLength(20);
     expect(first.latest?.entries?.items[0]).toMatchObject({
       noteTruncated: true,
     });
@@ -367,6 +371,19 @@ describe('restricted natural-language queries through protected D1/DO chat', () 
       baseAmount: 'CNY 35.00',
     });
     expect(model.entries.items[0]).not.toHaveProperty('originalMinor');
+    const income = await ask(thread, {
+      ...query(),
+      inheritPrevious: true,
+      period: null,
+      scope: 'income',
+      view: 'entries',
+      page: null,
+    });
+    expect(income.latest?.entries).toMatchObject({
+      page: 1,
+      pageCount: 0,
+      items: [],
+    });
     const reset = await ask(thread, {
       ...query(),
       inheritPrevious: true,
@@ -384,6 +401,113 @@ describe('restricted natural-language queries through protected D1/DO chat', () 
     ).toBe(true);
     const summary = await ask(thread, query());
     expect(summary.latest?.entries).toBeUndefined();
+  });
+
+  it('answers complete-period analytics with exact counts, averages and both new and vanished groups in one query', async () => {
+    await entry({
+      name: '上月合成购物',
+      date: '2024-02-20',
+      amount: '200',
+      categoryId: 'expense-other',
+      note: '',
+    });
+    await entry({
+      name: '本月合成午餐',
+      date: '2024-03-06',
+      amount: '100',
+      note: '',
+    });
+    await entry({
+      name: '本月合成晚餐',
+      date: '2024-03-07',
+      amount: '50',
+      note: '',
+    });
+    const thread = await createThread();
+    const answer = await ask(
+      thread,
+      query({
+        period: { kind: 'month', month: '2024-03' },
+        view: 'categories',
+        compare: true,
+      })
+    );
+    expect(modelCalls).toBe(2);
+    expect(answer.latest?.report).toMatchObject({
+      counts: { expense: 2 },
+      totals: { expense: 15000 },
+      comparison: {
+        basis: 'month',
+        filters: { from: '2024-02-01', to: '2024-02-29' },
+        previous: { counts: { expense: 1 }, totals: { expense: 20000 } },
+      },
+    });
+    expect(answer.latest?.report.comparison?.groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'expense-food',
+          totals: expect.objectContaining({ expense: 15000 }),
+          previous: expect.objectContaining({
+            totals: expect.objectContaining({ expense: 0 }),
+          }),
+        }),
+        expect.objectContaining({
+          id: 'expense-other',
+          totals: expect.objectContaining({ expense: 0 }),
+          previous: expect.objectContaining({
+            totals: expect.objectContaining({ expense: 20000 }),
+          }),
+        }),
+      ])
+    );
+    const model = JSON.parse(
+      modelInputs
+        .at(-1)
+        ?.messages.filter((m) => m.role === 'tool')
+        .at(-1)?.content ?? '{}'
+    );
+    expect(model.report).toMatchObject({
+      averages: { expense: 'CNY 75.00' },
+      comparison: {
+        previous: {
+          averages: { expense: 'CNY 200.00' },
+          totals: { expense: 'CNY 200.00' },
+        },
+        changes: {
+          amounts: {
+            expense: { difference: 'CNY -50.00', percentage: '-25%' },
+          },
+          count: { difference: 1, percentage: '+100%' },
+          average: { difference: 'CNY -125.00', percentage: '-62.5%' },
+        },
+      },
+    });
+    expect(
+      model.report.comparison.groups.map((group: { id: string }) => group.id)
+    ).toEqual(['expense-other', 'expense-food']);
+    if (!answer.latest) throw new Error('Missing analytic result');
+    const refreshed = await refreshLedgerQuery(
+      env.DB,
+      datasetId,
+      answer.latest
+    );
+    expect(refreshed.report.comparison).toEqual(
+      answer.latest?.report.comparison
+    );
+    const complete = await ask(
+      thread,
+      query({ period: { kind: 'complete_months', months: 3 } })
+    );
+    if (!complete.latest) throw new Error('Missing complete-period result');
+    const completeRefresh = await refreshLedgerQuery(
+      env.DB,
+      datasetId,
+      complete.latest
+    );
+    expect(completeRefresh.report.comparison?.filters).toEqual(
+      complete.latest?.report.comparison?.filters
+    );
+    expect(await (await api('entries')).json()).toHaveLength(3);
   });
 
   it.each([

@@ -40,6 +40,52 @@ function result() {
 }
 
 describe('shared model money input', () => {
+  it('presents exact averages and prior-period changes without leaking raw minor-unit comparison totals', () => {
+    const data = result();
+    const previous = {
+      total: 2,
+      counts: { income: 0, expense: 2, refund: 0 },
+      totals: { income: 0, expense: 20000, refund: 0, netExpense: 20000 },
+      originalTotals: null,
+    };
+    data.report.comparison = {
+      basis: 'range',
+      filters: { ...data.report.filters, from: '2025-10-03', to: '2025-12-31' },
+      previous,
+      groups: [],
+    };
+    const before = JSON.stringify(data);
+    const shown = JSON.parse(
+      modelMoney({ role: 'tool', content: before }).content as string
+    );
+    expect(shown.report.averages).toMatchObject({
+      expense: 'CNY 33.33',
+      income: null,
+    });
+    expect(shown.report.comparison).toMatchObject({
+      previous: {
+        totals: { expense: 'CNY 200.00' },
+        averages: { expense: 'CNY 100.00' },
+      },
+      changes: {
+        amounts: { expense: { difference: 'CNY -100.00', percentage: '-50%' } },
+        count: { difference: 1 },
+        average: { difference: 'CNY -66.67' },
+      },
+    });
+    expect(JSON.stringify(data)).toBe(before);
+    previous.totals.expense = 0;
+    previous.counts.expense = 0;
+    const fresh = JSON.parse(
+      modelMoney({ role: 'tool', content: JSON.stringify(data) })
+        .content as string
+    );
+    expect(fresh.report.comparison.changes.amounts.expense).toMatchObject({
+      isNew: true,
+      percentage: null,
+    });
+    expect(fresh.report.comparison.changes.average).toBeNull();
+  });
   it('formats draft receipts and refreshed reports without mutating persisted financial results', () => {
     const query = result();
     query.report.totals.netExpense = -1;
@@ -116,6 +162,93 @@ describe('shared model money input', () => {
 });
 
 describe('WeChat formatted statistics', () => {
+  it('shows twenty normal details together with bounded compact notes and no page-one-of-one or next-page prompt', () => {
+    const data = result();
+    data.query.view = 'entries';
+    data.report.total = 20;
+    data.report.counts.expense = 20;
+    data.entries = {
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+      items: Array.from({ length: 20 }, (_, i) => ({
+        id: crypto.randomUUID(),
+        name: `合成午餐${String(i).padStart(2, '0')}`,
+        date: '2026-03-01',
+        kind: 'expense',
+        currency: 'CNY',
+        originalMinor: 3500,
+        baseMinor: 3500,
+        categoryName: '饮食',
+        categoryKey: 'food',
+        tags: [],
+        note: '肯德基合成备注'.repeat(20),
+        noteTruncated: true,
+      })),
+    };
+    const text = wechatStatistics(data, 'zh');
+    for (const entry of data.entries.items) expect(text).toContain(entry.name);
+    expect(text.length).toBeLessThanOrEqual(2300);
+    expect(text).toContain('精简明细');
+    expect(text).not.toContain('页码');
+    expect(text).not.toContain('下一页');
+    expect(text).not.toContain('本页部分明细');
+  });
+
+  it('shows counts, averages and amount-ranked increases and decreases from the complete periods, including prior-only groups', () => {
+    const data = result();
+    const previous = {
+      total: 1,
+      counts: { income: 0, expense: 1, refund: 0 },
+      totals: { income: 0, expense: 20000, refund: 0, netExpense: 20000 },
+      originalTotals: null,
+    };
+    data.report.comparison = {
+      basis: 'range',
+      filters: { ...data.report.filters, from: '2025-10-03', to: '2025-12-31' },
+      previous,
+      groups: [
+        {
+          id: 'new',
+          name: '合成超市',
+          categoryKey: null,
+          kind: 'expense',
+          filters: data.report.filters,
+          total: 3,
+          counts: data.report.counts,
+          totals: data.report.totals,
+          originalTotals: null,
+          previous: {
+            ...previous,
+            total: 0,
+            counts: { income: 0, expense: 0, refund: 0 },
+            totals: { income: 0, expense: 0, refund: 0, netExpense: 0 },
+          },
+        },
+        {
+          id: 'gone',
+          name: '合成穿搭',
+          categoryKey: null,
+          kind: 'expense',
+          filters: data.report.filters,
+          total: 0,
+          counts: { income: 0, expense: 0, refund: 0 },
+          totals: { income: 0, expense: 0, refund: 0, netExpense: 0 },
+          originalTotals: null,
+          previous,
+        },
+      ],
+    };
+    const text = wechatStatistics(data, 'zh');
+    expect(text).toContain('消费次数：3 笔');
+    expect(text).toContain('平均每笔金额：**¥33.33**');
+    expect(text).toContain('2025-10-03 — 2025-12-31');
+    expect(text).toContain('增加最多');
+    expect(text).toContain('合成超市 · 新增 ¥100.00');
+    expect(text).toContain('减少最多');
+    expect(text).toContain('合成穿搭 · -¥200.00 (-100%)');
+    expect(text.length).toBeLessThanOrEqual(2300);
+  });
   it('shows posted entry names, original and converted amounts, own notes and page hints with literal Markdown escaped', () => {
     const data = result();
     data.query.view = 'entries';

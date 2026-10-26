@@ -269,7 +269,7 @@ export async function exportCsv(db: D1Database, raw: unknown) {
   ].flatMap((name) => [`'${name}'`, name]);
   const { state, rows } = await snapshot(db, [
     {
-      sql: `SELECT json_object(${fields.join(',')},'conversion',json(conversion_json),'tags',json(tags_json)) AS item FROM (${entrySelect} WHERE ${condition}) ORDER BY date DESC,id DESC`,
+      sql: `SELECT json_object(${fields.join(',')},'conversion',json(conversion_json),'tags',json(tags_json)) AS item FROM (${entrySelect} WHERE ${condition}) ORDER BY ${parsed.data.sort === 'amount_desc' ? 'baseMinor DESC,' : ''}date DESC,id DESC`,
       values,
     },
   ]);

@@ -19,13 +19,18 @@ import { queryReport, type Report } from './reports';
 import { readSettings } from './settings';
 import { readTaxonomy } from './taxonomy';
 
-async function readQueryEntries(db: D1Database, report: Report, page: number) {
-  const data = await queryEntries(db, { ...report.filters, page, pageSize: 5 });
+async function readQueryEntries(
+  db: D1Database,
+  report: Report,
+  page: number,
+  pageSize: 5 | 20 = 20
+) {
+  const data = await queryEntries(db, { ...report.filters, page, pageSize });
   if (data.datasetId !== report.datasetId || data.revision !== report.revision)
     throw new HttpError(409, 'conversation_changed');
   return {
     page,
-    pageSize: 5 as const,
+    pageSize,
     pageCount: data.pageCount,
     items: data.items.map((entry) => {
       const note = Array.from(entry.note);
@@ -122,6 +127,10 @@ export async function refreshLedgerQuery(
     filters: query.report.filters,
     groupBy: query.report.groupBy,
     interval: query.report.interval,
+    ...(query.report.comparison !== undefined
+      ? { compare: true as const }
+      : {}),
+    comparisonBasis: query.report.comparison?.basis,
   });
   if (report.datasetId !== datasetId)
     throw new HttpError(409, 'dataset_changed');
@@ -129,11 +138,18 @@ export async function refreshLedgerQuery(
     ...query,
     asOf: Date.now(),
     ...(query.query.view === 'entries'
-      ? { entries: await readQueryEntries(db, report, query.query.page ?? 1) }
+      ? {
+          entries: await readQueryEntries(
+            db,
+            report,
+            query.query.page ?? 1,
+            query.entries?.pageSize ?? 20
+          ),
+        }
       : {}),
     report: {
       ...report,
-      groups: ['categories', 'tags'].includes(query.query.view)
+      groups: ['summary', 'categories', 'tags'].includes(query.query.view)
         ? report.groups
         : [],
       trend: query.query.view === 'trend' ? report.trend : [],
@@ -180,9 +196,22 @@ export async function runLedgerQuery(
   const scope = input.scope ?? inherited?.scope ?? 'spending';
   const view = input.view ?? inherited?.view ?? 'summary';
   const interval = input.interval ?? inherited?.interval ?? 'week';
+  const compare =
+    input.compare ??
+    (inherited?.view === view ? inherited.compare : undefined) ??
+    (view !== 'entries' && period.kind !== 'all_time');
+  const sameDetails =
+    inherited?.view === 'entries' &&
+    view === 'entries' &&
+    !input.period &&
+    !Object.keys(input.filters).length &&
+    (!input.scope || input.scope === inherited.scope);
   const page =
     input.page ??
-    (input.period || Object.keys(input.filters).length
+    (input.period ||
+    Object.keys(input.filters).length ||
+    (input.scope && input.scope !== inherited?.scope) ||
+    (input.view && input.view !== inherited?.view)
       ? 1
       : (inherited?.page ?? 1));
   const category = filters.categoryId
@@ -236,12 +265,24 @@ export async function runLedgerQuery(
     page: 1,
   });
   if (!criteria.success) throw new HttpError(400, 'invalid_query_period');
+  const calendarPeriod =
+    period.kind === 'this_month' || period.kind === 'last_month'
+      ? { kind: 'month' as const, month: range.from.slice(0, 7) }
+      : period.kind === 'month' ||
+          period.kind === 'rolling_months' ||
+          period.kind === 'complete_months'
+        ? period
+        : undefined;
   const report = await queryReport(
     db,
     {
-      filters: criteria.data,
+      filters: calendarPeriod
+        ? { ...criteria.data, from: undefined, to: undefined }
+        : criteria.data,
+      ...(calendarPeriod ? { period: calendarPeriod } : {}),
       groupBy: view === 'tags' ? 'tag' : 'category',
       interval,
+      ...(compare ? { compare: true as const } : {}),
     },
     now
   );
@@ -262,10 +303,18 @@ export async function runLedgerQuery(
       filters,
       view,
       interval,
+      compare,
       ...(view === 'entries' ? { page } : {}),
     },
     ...(view === 'entries'
-      ? { entries: await readQueryEntries(db, report, page) }
+      ? {
+          entries: await readQueryEntries(
+            db,
+            report,
+            page,
+            sameDetails ? (previous?.entries?.pageSize ?? 20) : 20
+          ),
+        }
       : {}),
     criteria: {
       category: category
@@ -282,7 +331,9 @@ export async function runLedgerQuery(
     },
     report: {
       ...report,
-      groups: ['categories', 'tags'].includes(view) ? report.groups : [],
+      groups: ['summary', 'categories', 'tags'].includes(view)
+        ? report.groups
+        : [],
       trend: view === 'trend' ? report.trend : [],
     },
   });

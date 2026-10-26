@@ -2,6 +2,7 @@ import type { LedgerQueryResult } from '../ledger/chat-query-contract';
 import type { Currency } from '../ledger/currencies';
 import type { EntryTotals } from '../ledger/entry-query';
 import { displayMoney } from '../ledger/money';
+import { averageMinor } from '../ledger/report-comparison';
 import { categoryLabel } from './category-label';
 import { type AppLocale, message } from './locale';
 
@@ -93,7 +94,7 @@ export function wechatStatistics(result: LedgerQueryResult, locale: AppLocale) {
   ]
     .filter(Boolean)
     .join('\n');
-  if (!report.total)
+  if (!report.total && !report.comparison?.previous.total)
     return `${header}\n\n${t('nl_query_no_matches')}\n\n${footer}`.length <=
       2300
       ? `${header}\n\n${t('nl_query_no_matches')}\n\n${footer}`
@@ -104,6 +105,57 @@ export function wechatStatistics(result: LedgerQueryResult, locale: AppLocale) {
   )
     .map((line) => `- ${line}`)
     .join('\n')}\n- ${t('nl_query_matching')}${colon}${report.total}`;
+  const kind = query.scope === 'income' ? 'income' : 'expense';
+  const money = (value: number) =>
+    displayMoney(value, report.primaryCurrency, locale);
+  const average = averageMinor(report.totals[kind], report.counts[kind]);
+  const difference = (
+    current: number,
+    previous: number,
+    format: (value: number) => string
+  ) => {
+    const delta = current - previous;
+    if (!delta) return t('report_unchanged');
+    if (!previous && current > 0)
+      return `${t('report_new')} ${format(current)}`;
+    return `${delta > 0 ? '+' : ''}${format(delta)}${previous > 0 ? ` (${new Intl.NumberFormat(locale, { style: 'percent', signDisplay: 'exceptZero', maximumFractionDigits: 1 }).format(delta / previous)})` : ''}`;
+  };
+  body += `\n- ${t(kind === 'income' ? 'report_income_count' : 'report_expense_count')}${colon}${report.counts[kind]} ${t('report_records')}\n- ${t('report_average')}${colon}**${average === null ? '—' : money(average)}**`;
+  if (!report.total) body += `\n${t('nl_query_no_matches')}`;
+  if (report.comparison) {
+    const previous = report.comparison.previous;
+    const priorAverage = averageMinor(
+      previous.totals[kind],
+      previous.counts[kind]
+    );
+    body += `\n\n**${t('report_previous_period')} · ${report.comparison.filters.from} — ${report.comparison.filters.to}**\n${t(kind === 'income' ? 'entry_income' : 'entry_expense')}${colon}${money(previous.totals[kind])} → ${money(report.totals[kind])} · ${difference(report.totals[kind], previous.totals[kind], money)}\n${t(kind === 'income' ? 'report_income_count' : 'report_expense_count')}${colon}${previous.counts[kind]} → ${report.counts[kind]}\n${t('report_average_short')}${colon}${priorAverage === null ? '—' : money(priorAverage)} → ${average === null ? '—' : money(average)}`;
+    if (query.view !== 'entries' && query.view !== 'trend') {
+      for (const direction of ['increase', 'decrease'] as const) {
+        const changes = report.comparison.groups
+          .filter((row) =>
+            direction === 'increase'
+              ? row.totals[kind] > row.previous.totals[kind]
+              : row.totals[kind] < row.previous.totals[kind]
+          )
+          .sort((a, b) => {
+            const delta =
+              a.totals[kind] -
+              a.previous.totals[kind] -
+              b.totals[kind] +
+              b.previous.totals[kind];
+            return (
+              (direction === 'increase' ? -delta : delta) ||
+              (a.id ?? '').localeCompare(b.id ?? '', 'en')
+            );
+          })
+          .slice(0, 3);
+        if (changes.length) {
+          const block = `\n\n**${t(direction === 'increase' ? 'report_increases' : 'report_decreases')}**\n${changes.map((row, index) => `${index + 1}. ${literal(row.name === null ? t('report_untagged') : categoryLabel(row.name, row.categoryKey, locale))} · ${difference(row.totals[kind], row.previous.totals[kind], money)}`).join('\n')}`;
+          if (`${body}${block}\n\n${footer}`.length <= 1900) body += block;
+        }
+      }
+    }
+  }
   if (report.originalTotals && report.filters.currency)
     body += `\n\n**${t('query_original_totals')} · ${report.filters.currency}**\n${amounts(
       report.originalTotals,
@@ -116,7 +168,14 @@ export function wechatStatistics(result: LedgerQueryResult, locale: AppLocale) {
     return `📊 **${title}**\n\n${t('wechat_report_web_required')}`;
   const rows =
     query.view === 'summary'
-      ? []
+      ? report.groups.slice(0, 5).map((row) => ({
+          ...row,
+          label: categoryLabel(
+            row.name ?? t('query_unknown_filter'),
+            row.categoryKey,
+            locale
+          ),
+        }))
       : query.view === 'trend'
         ? report.trend.map((row) => ({
             ...row,
@@ -135,7 +194,46 @@ export function wechatStatistics(result: LedgerQueryResult, locale: AppLocale) {
           }));
   if (query.view === 'entries' && result.entries) {
     const { entries } = result;
-    body += `\n\n${t('nl_query_page')} ${entries.page} / ${entries.pageCount}`;
+    if (entries.pageCount > 1)
+      body += `\n\n${t('nl_query_page')} ${entries.page} / ${entries.pageCount}`;
+    if (entries.items.length > 5) {
+      const rowBudget = Math.floor(
+        (2300 -
+          body.length -
+          footer.length -
+          t('nl_query_details_compact').length -
+          t('nl_query_next_hint').length -
+          40) /
+          entries.items.length
+      );
+      let shown = 0;
+      for (const entry of entries.items) {
+        const name = Array.from(entry.name)
+          .slice(0, Math.max(8, Math.min(30, Math.floor((rowBudget - 48) / 2))))
+          .join('');
+        let block = `\n\n**${entry.date} · ${literal(name)}${name !== entry.name ? '…' : ''} · ${displayMoney(entry.originalMinor, entry.currency, locale)}**`;
+        if (entry.currency !== report.primaryCurrency)
+          block += `\n${t('query_equivalent')}${colon}${money(entry.baseMinor)}`;
+        const note = entry.note
+          ? Array.from(entry.note).slice(0, 24).join('')
+          : '';
+        if (note && block.length + literal(note).length + 8 <= rowBudget)
+          block += `\n${t('entry_note')}${colon}${literal(note)}${note !== entry.note || entry.noteTruncated ? '…' : ''}`;
+        if (
+          `${body}${block}\n\n${footer}\n\n${t('nl_query_entries_partial')}\n${t('nl_query_details_compact')}\n${t('nl_query_next_hint')}`
+            .length > 2300
+        )
+          break;
+        body += block;
+        shown++;
+      }
+      body += `\n\n${t('nl_query_details_compact')}`;
+      if (shown < entries.items.length)
+        body += `\n${t('nl_query_entries_partial')}`;
+      else if (entries.page < entries.pageCount)
+        body += `\n${t('nl_query_next_hint')}`;
+      return `${body}\n\n---\n\n${footer}`;
+    }
     let shown = 0;
     for (const entry of entries.items) {
       const kind = t(

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { currencies } from './currencies';
 import { datePeriod, entryDate } from './dates';
 import { entryFilters } from './entry-query';
+import { reportSelection } from './reports';
 
 export const queryPeriod = z.union([
   datePeriod,
@@ -37,6 +38,7 @@ export const ledgerQueryInput = z
       .enum(['summary', 'categories', 'tags', 'trend', 'entries'])
       .nullable(),
     interval: z.enum(['day', 'week', 'month']).nullable(),
+    compare: z.boolean().nullable().optional(),
     page: z.number().int().min(1).max(5000).nullable().optional(),
   })
   .strict();
@@ -69,6 +71,13 @@ const resultFilters = entryFilters.safeExtend({
   from: entryDate,
   to: entryDate,
 });
+const reportGroup = aggregate.extend({
+  id: z.string().nullable(),
+  name: z.string().nullable(),
+  categoryKey: z.string().nullable(),
+  kind: z.enum(['income', 'expense']).nullable(),
+  filters: resultFilters,
+});
 const report = aggregate.extend({
   datasetId: z.string().min(1).max(100),
   revision: count,
@@ -86,20 +95,23 @@ const report = aggregate.extend({
       }
     }),
   filters: resultFilters,
+  range: reportSelection.optional(),
   groupBy: z.enum(['category', 'tag']),
   interval: z.enum(['day', 'week', 'month']),
-  groups: z.array(
-    aggregate.extend({
-      id: z.string().nullable(),
-      name: z.string().nullable(),
-      categoryKey: z.string().nullable(),
-      kind: z.enum(['income', 'expense']).nullable(),
-      filters: resultFilters,
-    })
-  ),
+  groups: z.array(reportGroup),
   trend: z.array(
     aggregate.extend({ from: entryDate, to: entryDate, filters: resultFilters })
   ),
+  comparison: z
+    .object({
+      basis: z.enum(['day', 'week', 'month', 'complete_months', 'range']),
+      filters: resultFilters,
+      previous: aggregate,
+      groups: z.array(reportGroup.extend({ previous: aggregate })),
+    })
+    .strict()
+    .nullable()
+    .optional(),
 });
 export const ledgerQueryResult = z
   .object({
@@ -119,7 +131,7 @@ export const ledgerQueryResult = z
     entries: z
       .object({
         page: count.min(1).max(5000),
-        pageSize: z.literal(5),
+        pageSize: z.union([z.literal(5), z.literal(20)]),
         pageCount: count,
         items: z
           .array(
@@ -140,9 +152,10 @@ export const ledgerQueryResult = z
               })
               .strict()
           )
-          .max(5),
+          .max(20),
       })
       .strict()
+      .refine((value) => value.items.length <= value.pageSize)
       .optional(),
   })
   .strict();

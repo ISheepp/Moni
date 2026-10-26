@@ -1,6 +1,11 @@
 import { IconInfoCircle } from '@tabler/icons-react';
 import type { UIMessage } from '@tanstack/ai-react';
 import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import {
+  ReportChanges,
+  ReportComparisonSummary,
+} from '@/components/report-comparison';
 import { buttonVariants } from '@/components/ui/button';
 import {
   type LedgerQueryResult,
@@ -36,6 +41,13 @@ export function QueryResultCard({
 }) {
   const t = (key: Parameters<typeof message>[0]) => message(key, locale);
   const { report, query, criteria } = result;
+  const [direction, setDirection] = useState<'increase' | 'decrease'>(
+    'increase'
+  );
+  const financialReport = {
+    ...report,
+    range: report.range ?? { from: report.filters.from, to: report.filters.to },
+  };
   const filters = report.filters;
   const originalTotals = report.originalTotals;
   const originalCurrency = filters.currency;
@@ -76,24 +88,26 @@ export function QueryResultCard({
     filters.keyword ? `${t('nl_query_keyword')}：“${filters.keyword}”` : '',
   ].filter(Boolean);
   const rows =
-    query.view === 'trend'
-      ? report.trend.map((row) => ({
-          ...row,
-          key: `${row.from}:${row.to}`,
-          label: `${row.from} — ${row.to}`,
-        }))
-      : report.groups.map((row) => ({
-          ...row,
-          key: row.id ?? 'untagged',
-          label:
-            query.view === 'tags'
-              ? (row.name ?? t('report_untagged'))
-              : categoryLabel(
-                  row.name ?? t('query_unknown_filter'),
-                  row.categoryKey,
-                  locale
-                ),
-        }));
+    query.view === 'summary' || query.view === 'entries'
+      ? []
+      : query.view === 'trend'
+        ? report.trend.map((row) => ({
+            ...row,
+            key: `${row.from}:${row.to}`,
+            label: `${row.from} — ${row.to}`,
+          }))
+        : report.groups.map((row) => ({
+            ...row,
+            key: row.id ?? 'untagged',
+            label:
+              query.view === 'tags'
+                ? (row.name ?? t('report_untagged'))
+                : categoryLabel(
+                    row.name ?? t('query_unknown_filter'),
+                    row.categoryKey,
+                    locale
+                  ),
+          }));
   const metrics = [
     { key: 'income', label: 'entry_income' },
     { key: 'expense', label: 'entry_expense' },
@@ -190,6 +204,27 @@ export function QueryResultCard({
           </strong>
         </p>
       )}
+      <ReportComparisonSummary
+        data={financialReport}
+        kind={query.scope === 'income' ? 'income' : 'expense'}
+        locale={locale}
+      />
+      {report.comparison &&
+        query.view !== 'entries' &&
+        query.view !== 'trend' && (
+          <div className="mt-4">
+            <ReportChanges
+              data={financialReport}
+              kind={query.scope === 'income' ? 'income' : 'expense'}
+              locale={locale}
+              currency={report.primaryCurrency}
+              loading={false}
+              direction={direction}
+              onDirectionChange={setDirection}
+              titleId={`query-changes-${result.id}`}
+            />
+          </div>
+        )}
       {originalTotals && originalCurrency && (
         <section
           aria-label={t('query_original_totals')}
@@ -223,7 +258,7 @@ export function QueryResultCard({
           {filters.keyword ? ` ${t('nl_query_keyword_hint')}` : ''}
         </span>
       </p>
-      {query.view === 'tags' && (
+      {query.view === 'tags' && !report.comparison && (
         <p className="mb-4 text-sm text-muted-foreground">
           {t('report_tags_overlap')}
         </p>
@@ -290,13 +325,15 @@ export function QueryResultCard({
       )}
       {query.view === 'entries' && result.entries && (
         <section aria-label={t('nl_query_entries')} className="my-4">
-          <p className="mb-3 text-sm text-muted-foreground">
-            {t('nl_query_page')} {result.entries.page} /{' '}
-            {Math.max(1, result.entries.pageCount)}
-            {result.entries.page < result.entries.pageCount
-              ? ` · ${t('nl_query_next_hint')}`
-              : ''}
-          </p>
+          {result.entries.pageCount > 1 && (
+            <p className="mb-3 text-sm text-muted-foreground">
+              {t('nl_query_page')} {result.entries.page} /{' '}
+              {Math.max(1, result.entries.pageCount)}
+              {result.entries.page < result.entries.pageCount
+                ? ` · ${t('nl_query_next_hint')}`
+                : ''}
+            </p>
+          )}
           <ul className="divide-y divide-muted rounded-xl border border-foreground/30 px-4">
             {result.entries.items.map((entry) => (
               <li key={entry.id}>

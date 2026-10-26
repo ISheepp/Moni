@@ -14,7 +14,8 @@ export async function lastQueryDetails(
   const result = await refreshLedgerQuery(db, datasetId, {
     ...previous,
     id: crypto.randomUUID(),
-    query: { ...previous.query, view: 'entries', page: 1 },
+    query: { ...previous.query, view: 'entries', page: 1, compare: false },
+    report: { ...previous.report, comparison: undefined },
   });
   return `${message('chat_query_fallback', locale)}\n\n${wechatStatistics(result, locale)}`;
 }

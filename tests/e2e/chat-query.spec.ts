@@ -134,7 +134,9 @@ test('dated query cards retain filters, separate currencies, survive reload, and
   };
   const first = await ask(base, 1);
   await expect(first.getByText('CN¥153.00', { exact: true })).toBeVisible();
-  await expect(first.getByText('CN¥189.00', { exact: true })).toBeVisible();
+  await expect(
+    first.getByText('CN¥189.00', { exact: true }).first()
+  ).toBeVisible();
   await expect(first.getByText('CN¥36.00', { exact: true })).toBeVisible();
   expect(
     await first.evaluate((card) => {
@@ -176,7 +178,9 @@ test('dated query cards retain filters, separate currencies, survive reload, and
     },
     2
   );
-  await expect(second.getByText('CN¥179.00', { exact: true })).toHaveCount(2);
+  await expect(
+    second.getByText('CN¥179.00', { exact: true }).first()
+  ).toBeVisible();
   await expect(second.getByText('Any tag：Delivery')).toBeVisible();
   await page.reload();
   await expect(results).toHaveCount(2);
@@ -233,6 +237,7 @@ test('dated query cards retain filters, separate currencies, survive reload, and
       () => document.documentElement.scrollWidth <= innerWidth
     )
   ).toBe(true);
+  const chatUrl = page.url();
   await results
     .first()
     .getByRole('link', { name: 'View current details · 4', exact: true })
@@ -252,4 +257,83 @@ test('dated query cards retain filters, separate currencies, survive reload, and
   await expect(
     page.getByRole('combobox', { name: 'Type', exact: true })
   ).toHaveText('Expenses and refunds');
+  for (let i = 0; i < 12; i++)
+    await entry({
+      name: `BatchDetail ${i}`,
+      amount: '10',
+      date: '2024-03-15',
+      note: 'Synthetic batch note',
+    });
+  await entry({
+    name: 'BatchDetail previous',
+    amount: '200',
+    date: '2024-02-15',
+    categoryId: 'expense-other',
+    note: '',
+  });
+  await page.goto(chatUrl);
+  const analysis = await ask(
+    {
+      ...base,
+      period: { kind: 'month', month: '2024-03' },
+      filters: { keyword: 'BatchDetail' },
+      view: 'categories',
+      compare: true,
+    },
+    8
+  );
+  const frequency = analysis.getByRole('region', {
+    name: 'Frequency and average',
+    exact: true,
+  });
+  await expect(frequency).toContainText('12 records');
+  await expect(frequency.getByText('CN¥10.00', { exact: true })).toBeVisible();
+  await expect(frequency).toContainText('2024-02-01 — 2024-02-29');
+  const changes = analysis.getByRole('region', {
+    name: 'Change rankings',
+    exact: true,
+  });
+  await expect(changes).toContainText('Food');
+  await changes
+    .getByRole('button', { name: 'Largest decreases', exact: true })
+    .click();
+  await expect(changes).toContainText('Other');
+  await expect(changes).toContainText('-CN¥200.00');
+  const more = await ask(
+    {
+      ...base,
+      inheritPrevious: true,
+      period: null,
+      scope: null,
+      filters: {},
+      view: 'entries',
+      compare: false,
+      interval: null,
+    },
+    9
+  );
+  const allDetails = more.getByRole('region', {
+    name: 'Entry details',
+    exact: true,
+  });
+  await expect(allDetails.getByRole('link')).toHaveCount(12);
+  await expect(allDetails).not.toContainText('Page');
+  await expect(allDetails).not.toContainText('next page');
+  expect(calls).toBe(18);
+  await page.reload();
+  await expect(
+    results
+      .last()
+      .getByRole('region', { name: 'Entry details', exact: true })
+      .getByRole('link')
+  ).toHaveCount(12);
+  const ids = await page
+    .locator('h2[id^="query-changes-"]')
+    .evaluateAll((elements) => elements.map((el) => el.id));
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth
+    )
+  ).toBe(true);
 });
