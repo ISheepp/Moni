@@ -673,6 +673,12 @@ test('reports expose exact dated figures, reusable drilldowns, filters, themes a
     .getByRole('button', { name: 'Tags', exact: true })
     .click();
   await expect(
+    page.getByRole('list', { name: 'Tag ranking', exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText(/An entry can appear in multiple tag groups/)
+  ).toHaveCount(1);
+  await expect(
     page.getByText(/An entry can appear in multiple tag groups/)
   ).toBeVisible();
   await page.getByRole('button', { name: /^Delivery · 2 records/ }).click();

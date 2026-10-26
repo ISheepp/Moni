@@ -836,11 +836,6 @@ export function ReportWorkspace({
             {visible.filters.from} — {visible.filters.to}
           </p>
         )}
-        {ranking === 'tag' && (
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            {t('report_tags_overlap')}
-          </p>
-        )}
         {visible ? (
           <>
             {ranking === 'entries' ? (
