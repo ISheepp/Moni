@@ -497,6 +497,7 @@ export class Conversation extends DurableObject<Env> {
         try {
           for await (const chunk of source) {
             if (chunk.type === 'RUN_ERROR') {
+              logChatFailure(chunk);
               failed =
                 chunk.code === 'context_limit'
                   ? 'context_limit'
@@ -511,6 +512,7 @@ export class Conversation extends DurableObject<Env> {
             }
           }
         } catch (error) {
+          logChatFailure(error);
           failed =
             error instanceof HttpError && error.code === 'context_limit'
               ? 'context_limit'
@@ -741,4 +743,42 @@ export class Conversation extends DurableObject<Env> {
     await this.endRun(active, 'timed_out');
     await this.clearActive(active.token);
   }
+}
+
+function logChatFailure(error: unknown) {
+  const failure = error as {
+    status?: unknown;
+    code?: unknown;
+    message?: unknown;
+  } | null;
+  const rawStatus = failure?.status ?? failure?.code;
+  const candidate =
+    typeof rawStatus === 'number' || typeof rawStatus === 'string'
+      ? Number(rawStatus)
+      : Number.NaN;
+  const status =
+    Number.isInteger(candidate) && candidate >= 400 && candidate <= 599
+      ? candidate
+      : undefined;
+  const detail = typeof failure?.message === 'string' ? failure.message : '';
+  const reason =
+    status === 401 || status === 403
+      ? 'authentication'
+      : status === 429
+        ? 'rate_limit'
+        : /reasoning|encrypted_content/i.test(detail)
+          ? 'reasoning_history'
+          : /No tool (?:output|call) found|call_id|function_call_output/i.test(
+                detail
+              )
+            ? 'tool_history'
+            : /schema|parameters/i.test(detail)
+              ? 'tool_schema'
+              : status && status >= 500
+                ? 'provider'
+                : status
+                  ? 'request_rejected'
+                  : 'unknown';
+  // Provider messages and codes may contain private input or credentials.
+  console.warn('chat_run_failed', { reason, ...(status ? { status } : {}) });
 }

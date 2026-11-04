@@ -141,6 +141,38 @@ async function metadata(id: string) {
 }
 
 describe('formal protected conversation lifecycle', () => {
+  it.each([
+    [400, 'Reasoning item is required', 'reasoning_history'],
+    [400, 'No tool output found for function call', 'tool_history'],
+    [400, 'Invalid schema for function parameters', 'tool_schema'],
+    [401, 'Authentication failed', 'authentication'],
+    [429, 'Too many requests', 'rate_limit'],
+    [502, 'Provider unavailable', 'provider'],
+  ] as const)('records a safe failure category for HTTP %i %s', async (status, detail, reason) => {
+    const id = await create();
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      replies.push({
+        text: `${detail}: PRIVATE_PROVIDER_DETAIL sk-synthetic-private-key`,
+        status,
+      });
+      const output = await (await api('chat', turn(id))).text();
+      expect(warnings).toHaveBeenCalledWith('chat_run_failed', {
+        reason,
+        status,
+      });
+      expect(JSON.stringify(warnings.mock.calls)).not.toContain(
+        'PRIVATE_PROVIDER_DETAIL'
+      );
+      expect(JSON.stringify(warnings.mock.calls)).not.toContain(
+        'sk-synthetic-private-key'
+      );
+      expect(output).not.toContain('PRIVATE_PROVIDER_DETAIL');
+    } finally {
+      warnings.mockRestore();
+    }
+  });
+
   it('fences late summaries and subsequent model calls when deletion notification fails', async () => {
     const id = await create();
     await chatPersistence(env.DB, datasetId).stores.messages.saveThread(
