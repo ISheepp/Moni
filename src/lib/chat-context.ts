@@ -67,10 +67,10 @@ async function summarizeHistory(
     baseURL: config.baseURL,
     api: config.api,
     maxRetries: 0,
-    timeout: 15000,
+    timeout: 30000,
   });
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), 30000);
   const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true });
   let summary = '';

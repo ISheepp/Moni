@@ -61,7 +61,7 @@ async function run(
   return text;
 }
 
-it('times out summary after 15 seconds and continues with the intact current turn in a safe window', async () => {
+it('times out summary after 30 seconds and continues with the intact current turn in a safe window', async () => {
   vi.useFakeTimers();
   const requests: { messages: { role: string; content: string }[] }[] = [];
   vi.stubGlobal('fetch', async (_input: unknown, init?: RequestInit) => {
@@ -94,7 +94,7 @@ it('times out summary after 15 seconds and continues with the intact current tur
     { role: 'user', content: 'Current synthetic input' },
   ];
   const result = run(history);
-  await vi.advanceTimersByTimeAsync(14999);
+  await vi.advanceTimersByTimeAsync(29999);
   expect(requests).toHaveLength(1);
   await vi.advanceTimersByTimeAsync(1);
   expect(await result).toBe('Synthetic bounded reply');
@@ -113,7 +113,8 @@ it('rejects an oversized current turn before any model or summary request', asyn
   expect(fetcher).not.toHaveBeenCalled();
 });
 
-it('uses the saved Responses protocol for automatic summaries and preserves full history', async () => {
+it('accepts successful Responses summary batches taking over 15 seconds in total and preserves full history', async () => {
+  vi.useFakeTimers();
   const config = await aiConfiguration(env);
   if (!config) throw new Error('Synthetic configuration missing');
   vi.mocked(aiConfiguration).mockResolvedValueOnce({
@@ -125,6 +126,7 @@ it('uses the saved Responses protocol for automatic summaries and preserves full
     paths.push(String(url));
     if (String(url).endsWith('/responses')) {
       expect(JSON.parse(String(init?.body)).input).toBeDefined();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
       return new Response(
         `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_summary', status: 'completed', output: [{ type: 'message', id: 'msg_summary', role: 'assistant', content: [{ type: 'output_text', text: 'Synthetic Responses memory.', annotations: [] }] }] } })}\n\n`,
         { headers: { 'Content-Type': 'text/event-stream' } }
@@ -143,7 +145,15 @@ it('uses the saved Responses protocol for automatic summaries and preserves full
     })),
     { role: 'user', content: 'Current synthetic input' },
   ];
-  expect(await run(history)).toBe('Synthetic answer');
+  const result = run(history).then(
+    (text) => ({ text }),
+    (error: unknown) => ({ error })
+  );
+  await vi.advanceTimersByTimeAsync(29999);
+  expect(await result).toEqual({ text: 'Synthetic answer' });
+  expect(
+    paths.filter((path) => path.endsWith('/responses')).length
+  ).toBeGreaterThan(5);
   expect(paths).toContain('https://model.invalid/v1/responses');
   expect(history).toHaveLength(101);
 });
@@ -190,7 +200,7 @@ it('does not repeat a failed summary during the same run and allows a fresh run 
     async () => {}
   );
   const first = run(history, middleware);
-  await vi.advanceTimersByTimeAsync(15000);
+  await vi.advanceTimersByTimeAsync(30000);
   expect(await first).toBe('Synthetic answer');
   expect(summaries).toBe(1);
   const nextStep = run(history, middleware);
@@ -199,11 +209,11 @@ it('does not repeat a failed summary during the same run and allows a fresh run 
     expect(summaries).toBe(1);
     expect(answers).toBe(2);
   } finally {
-    await vi.advanceTimersByTimeAsync(15000);
+    await vi.advanceTimersByTimeAsync(30000);
     await nextStep;
   }
   const fresh = run(history);
-  await vi.advanceTimersByTimeAsync(15000);
+  await vi.advanceTimersByTimeAsync(30000);
   expect(await fresh).toBe('Synthetic answer');
   expect(summaries).toBe(2);
   expect(answers).toBe(3);
