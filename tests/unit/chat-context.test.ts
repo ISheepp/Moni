@@ -35,7 +35,8 @@ async function run(
     env,
     new AbortController().signal,
     async () => {}
-  )
+  ),
+  api: 'chat-completions' | 'responses' = 'chat-completions'
 ) {
   const provider = openaiCompatible({
     models: [
@@ -47,6 +48,7 @@ async function run(
     ],
     apiKey: env.AI_API_KEY,
     baseURL: env.AI_BASE_URL,
+    api,
     maxRetries: 0,
   });
   let text = '';
@@ -60,6 +62,96 @@ async function run(
     if (chunk.type === 'TEXT_MESSAGE_CONTENT') text += chunk.delta;
   return text;
 }
+
+it.each([
+  false,
+  true,
+])('replays prior Responses history without native state while preserving the current turn (summary fallback: %s)', async (fallback) => {
+  const native = (suffix: string) => ({
+    thinking: [
+      {
+        content: '',
+        signature: JSON.stringify({
+          id: `rs_${suffix}`,
+          encrypted_content: `${suffix}-encrypted`,
+        }),
+      },
+    ],
+    metadata: {
+      tanstack: {
+        source: {
+          provider: 'openai-compatible',
+          api: 'openai-responses',
+          model: 'synthetic-model',
+        },
+        responseItems: [{ id: `msg_${suffix}`, phase: 'final_answer' }],
+      },
+    },
+    toolCalls: [
+      {
+        id: `call_${suffix}`,
+        type: 'function' as const,
+        function: { name: 'get_ledger_context', arguments: '{}' },
+        metadata: { itemId: `fc_${suffix}` },
+      },
+    ],
+  });
+  const history: ModelMessage[] = [
+    ...(fallback
+      ? Array.from({ length: 100 }, () => ({
+          role: 'user' as const,
+          content: 'Synthetic history '.repeat(100),
+        }))
+      : []),
+    { role: 'user', content: 'Earlier synthetic request' },
+    {
+      role: 'assistant',
+      content: 'Earlier synthetic answer',
+      ...native('history'),
+    },
+    { role: 'tool', toolCallId: 'call_history', content: '{"earlier":true}' },
+    { role: 'user', content: 'Current synthetic request' },
+    { role: 'assistant', content: null, ...native('current') },
+    { role: 'tool', toolCallId: 'call_current', content: '{"current":true}' },
+  ];
+  const original = structuredClone(history);
+  const bodies: string[] = [];
+  vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
+    const body = String(init?.body);
+    if (body.includes('You summarize Moni'))
+      return Response.json(
+        { error: { message: 'Synthetic summary failure' } },
+        { status: 502 }
+      );
+    bodies.push(body);
+    if (
+      ['rs_history', 'fc_history', 'msg_history'].some((id) =>
+        body.includes(id)
+      )
+    )
+      return Response.json(
+        { error: { message: 'Synthetic stale native history rejected' } },
+        { status: 400 }
+      );
+    return new Response(
+      `data: ${JSON.stringify({ type: 'response.completed', response: { id: 'resp_test', status: 'completed', output: [{ type: 'message', id: 'msg_reply', role: 'assistant', content: [{ type: 'output_text', text: 'Synthetic portable reply', annotations: [] }] }] } })}\n\n`,
+      { headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  });
+  expect(
+    await run(
+      history,
+      conversationContext(env, new AbortController().signal, async () => {}),
+      'responses'
+    )
+  ).toBe('Synthetic portable reply');
+  expect(bodies).toHaveLength(1);
+  for (const id of ['rs_current', 'fc_current'])
+    expect(bodies[0]).toContain(id);
+  expect(bodies[0]).toContain('call_history');
+  expect(bodies[0]).toContain('earlier');
+  expect(history).toEqual(original);
+});
 
 it('times out summary after 30 seconds and continues with the intact current turn in a safe window', async () => {
   vi.useFakeTimers();

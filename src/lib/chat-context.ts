@@ -31,6 +31,36 @@ function currentTurn(messages: readonly ModelMessage[]) {
     if (messages[index].role === 'user') return index;
   return -1;
 }
+
+function portableHistory(messages: readonly ModelMessage[]) {
+  const current = currentTurn(messages);
+  return messages.map((message, index) =>
+    index < current &&
+    message.role === 'assistant' &&
+    message.metadata?.tanstack?.source?.api === 'openai-responses'
+      ? {
+          ...message,
+          // Native Responses state can depend on omitted history or upstream state.
+          thinking: undefined,
+          metadata: {
+            ...message.metadata,
+            tanstack: {
+              ...message.metadata.tanstack,
+              responseItems: undefined,
+            },
+          },
+          toolCalls: message.toolCalls?.map((call) => ({
+            ...call,
+            ...(call.metadata &&
+            typeof call.metadata === 'object' &&
+            !Array.isArray(call.metadata)
+              ? { metadata: { ...call.metadata, itemId: undefined } }
+              : {}),
+          })),
+        }
+      : message
+  );
+}
 function recentBudget(messages: readonly ModelMessage[]) {
   const current = currentTurn(messages);
   if (current < 0) throw new HttpError(413, 'context_limit');
@@ -148,13 +178,13 @@ export function conversationContext(
   const compaction = withCompaction({
     maxTokens: limits.contextTokens,
     estimateTokens: contextTokens,
-    strategyKey: 'moni-summary-window-v2',
+    strategyKey: 'moni-summary-window-v3',
     strategy: (messages, context) =>
       composeStrategies(
         (history) => {
           const current = currentTurn(history);
           // Old tool snapshots are stale; retain their pairing and every current-turn result.
-          return history.map((message, index) =>
+          return portableHistory(history).map((message, index) =>
             message.role === 'tool' && index < current
               ? {
                   ...message,
@@ -165,7 +195,7 @@ export function conversationContext(
           );
         },
         summarizeOldest({
-          keepRecentTokens: recentBudget(messages),
+          keepRecentTokens: recentBudget(portableHistory(messages)),
           summarize: async (head) => {
             if (summaryFailed) throw new Error('Summary unavailable this run');
             try {
@@ -193,15 +223,16 @@ export function conversationContext(
         console.warn('chat_compaction_fallback', {
           reason: 'summary_unavailable',
         });
+        const messages = portableHistory(config.messages);
         projected =
           (await evictOldest({
-            keepRecentTokens: recentBudget(config.messages),
+            keepRecentTokens: recentBudget(messages),
             marker: () =>
               '[Earlier context is temporarily unavailable. Ask for clarification instead of guessing. Read ledger tools for drafts and query conditions.]',
-          })(config.messages, {
+          })(messages, {
             maxTokens: limits.contextTokens,
             estimate: contextTokens,
-          })) ?? config.messages;
+          })) ?? messages;
       }
       if (total(projected) > limits.contextTokens)
         throw new HttpError(413, 'context_limit');
@@ -213,7 +244,7 @@ export function conversationContext(
         JSON.stringify(projected.slice(-tail.length)) !== JSON.stringify(tail)
       )
         throw new HttpError(413, 'context_limit');
-      const providerMessages = projected.map(modelMoney);
+      const providerMessages = portableHistory(projected).map(modelMoney);
       if (total(providerMessages) > limits.contextTokens)
         throw new HttpError(413, 'context_limit');
       return { providerMessages };
